@@ -1,7 +1,7 @@
 # pdf_reports.py
 """
 Générateur de rapports PDF pour le scouting
-Version complète prête à l'emploi
+Version complète corrigée - prête à l'emploi
 """
 
 from matplotlib.backends.backend_pdf import PdfPages
@@ -42,8 +42,8 @@ class ScoutingReportGenerator:
                         try:
                             pdf.savefig(fig, bbox_inches='tight')
                             plt.close(fig)
-                        except:
-                            pass
+                        except Exception as e:
+                            print(f"⚠️ Erreur visualisation {viz_name}: {e}")
                 
                 # Page comparaison
                 if not similar_players.empty:
@@ -76,14 +76,17 @@ class ScoutingReportGenerator:
                    ha='center', fontsize=28, weight='bold',
                    transform=ax.transAxes)
             
-            player_name = player_data.get('player', 'Joueur Inconnu')
+            player_name = str(player_data.get('player', 'Joueur Inconnu'))
             ax.text(0.5, 0.55, player_name,
                    ha='center', fontsize=36, weight='bold',
                    color='#1f77b4', transform=ax.transAxes)
             
+            team_name = str(player_data.get('team', 'N/A'))
+            matches = self._safe_int(player_data.get('matches_played', 0))
+            
             info_text = f"""
-            Équipe: {player_data.get('team', 'N/A')}
-            Matchs joués: {player_data.get('matches_played', 'N/A')}
+            Équipe: {team_name}
+            Matchs joués: {matches}
             """
             
             ax.text(0.5, 0.35, info_text,
@@ -186,12 +189,11 @@ class ScoutingReportGenerator:
                     if metric in player_data.index:
                         val = player_data[metric]
                         if pd.notna(val):
-                            try:
-                                values.append(float(val))
+                            # Conversion sécurisée
+                            num_val = self._safe_float(val)
+                            if num_val is not None:
+                                values.append(num_val)
                                 labels.append(metric.replace('_', ' ').title())
-                            except (ValueError, TypeError):
-                                # Ignorer les valeurs non numériques
-                                pass
                 
                 if values:
                     bars = ax.barh(labels, values, color='steelblue', alpha=0.7)
@@ -233,9 +235,15 @@ class ScoutingReportGenerator:
                 if available_cols:
                     table_data = similar[available_cols].head(10).copy()
                     
-                    # Formater les valeurs
-                    if 'similarity_score' in table_data.columns:
-                        table_data['similarity_score'] = table_data['similarity_score'].apply(lambda x: f'{x:.2f}' if pd.notna(x) else 'N/A')
+                    # Formater les valeurs numériques
+                    for col in table_data.columns:
+                        if col == 'similarity_score':
+                            table_data[col] = table_data[col].apply(
+                                lambda x: f'{float(x):.2f}' if pd.notna(x) and self._is_numeric(x) else 'N/A'
+                            )
+                        else:
+                            # Convertir en string pour éviter les erreurs
+                            table_data[col] = table_data[col].astype(str)
                     
                     table = ax.table(
                         cellText=table_data.values,
@@ -297,25 +305,24 @@ class ScoutingReportGenerator:
         strengths = []
         
         try:
-            # ✅ Utiliser des conversions sécurisées
             goals_per_90 = self._safe_float(player_data.get('goals_per_90', 0))
             pass_rate = self._safe_float(player_data.get('pass_completion_rate', 0))
             dribble_rate = self._safe_float(player_data.get('dribble_success_rate', 0))
             tackles = self._safe_float(player_data.get('tackles_per_90', 0))
             assists = self._safe_float(player_data.get('assists_per_90', 0))
             
-            if goals_per_90 > 0.5:
+            if goals_per_90 and goals_per_90 > 0.5:
                 strengths.append('Excellent finisseur')
-            if pass_rate > 85:
+            if pass_rate and pass_rate > 85:
                 strengths.append('Très bonne précision de passe')
-            if dribble_rate > 65:
+            if dribble_rate and dribble_rate > 65:
                 strengths.append('Excellent dribbleur')
-            if tackles > 3:
+            if tackles and tackles > 3:
                 strengths.append('Bon récupérateur')
-            if assists > 0.3:
+            if assists and assists > 0.3:
                 strengths.append('Très bon créateur')
         except Exception as e:
-            print(f"⚠️ Erreur dans _identify_strengths: {e}")
+            print(f"⚠️ Erreur strengths: {e}")
         
         return strengths if strengths else ['Profil équilibré']
     
@@ -328,24 +335,23 @@ class ScoutingReportGenerator:
             pass_rate = self._safe_float(player_data.get('pass_completion_rate', 80))
             fouls = self._safe_float(player_data.get('fouls_committed', 0))
             
-            if shot_acc < 35:
+            if shot_acc and shot_acc < 35:
                 weaknesses.append('Précision des tirs à améliorer')
-            if pass_rate < 75:
+            if pass_rate and pass_rate < 75:
                 weaknesses.append('Précision de passe insuffisante')
-            if fouls > 2:
+            if fouls and fouls > 2:
                 weaknesses.append('Discipline à travailler')
         except Exception as e:
-            print(f"⚠️ Erreur dans _identify_weaknesses: {e}")
+            print(f"⚠️ Erreur weaknesses: {e}")
         
         return weaknesses if weaknesses else ['Peu de faiblesses identifiées']
     
     def _generate_verdict(self, player_data: pd.Series) -> str:
         """Génère un verdict"""
         try:
-            # Calculer un score simplifié
-            goals = self._safe_float(player_data.get('goals_per_90', 0))
-            assists = self._safe_float(player_data.get('assists_per_90', 0))
-            pass_rate = self._safe_float(player_data.get('pass_completion_rate', 0))
+            goals = self._safe_float(player_data.get('goals_per_90', 0)) or 0
+            assists = self._safe_float(player_data.get('assists_per_90', 0)) or 0
+            pass_rate = self._safe_float(player_data.get('pass_completion_rate', 0)) or 0
             
             score = (goals * 20) + (assists * 15) + (pass_rate * 0.5)
             
@@ -358,7 +364,7 @@ class ScoutingReportGenerator:
             else:
                 return "Profil en dessous des standards."
         except Exception as e:
-            print(f"⚠️ Erreur dans _generate_verdict: {e}")
+            print(f"⚠️ Erreur verdict: {e}")
             return "Évaluation nécessaire."
     
     def _generate_recommendations(self, player_data: pd.Series) -> List[str]:
@@ -366,10 +372,10 @@ class ScoutingReportGenerator:
         recs = []
         
         try:
-            matches = int(self._safe_float(player_data.get('matches_played', 0)))
-            goals = self._safe_float(player_data.get('goals_per_90', 0))
-            assists = self._safe_float(player_data.get('assists_per_90', 0))
-            tackles = self._safe_float(player_data.get('tackles_per_90', 0))
+            matches = self._safe_int(player_data.get('matches_played', 0)) or 0
+            goals = self._safe_float(player_data.get('goals_per_90', 0)) or 0
+            assists = self._safe_float(player_data.get('assists_per_90', 0)) or 0
+            tackles = self._safe_float(player_data.get('tackles_per_90', 0)) or 0
             
             recs.append(f"Expérience: {matches} matchs cette saison")
             
@@ -384,19 +390,47 @@ class ScoutingReportGenerator:
             
             recs.append("Intégration progressive sur 3-6 mois")
         except Exception as e:
-            print(f"⚠️ Erreur dans _generate_recommendations: {e}")
+            print(f"⚠️ Erreur recommendations: {e}")
             recs = ["Analyse détaillée recommandée"]
         
         return recs
     
-    def _safe_float(self, value) -> float:
-        """Convertit une valeur en float de manière sécurisée"""
+    def _safe_float(self, value) -> Optional[float]:
+        """Convertit en float de manière sécurisée"""
+        if value is None:
+            return None
+        
         try:
             if pd.isna(value):
-                return 0.0
+                return None
+            
+            # Si c'est déjà un nombre
+            if isinstance(value, (int, float)):
+                return float(value)
+            
+            # Si c'est une string, essayer de convertir
+            if isinstance(value, str):
+                # Retirer les espaces
+                value = value.strip()
+                # Si la string contient seulement des lettres, retourner None
+                if value.isalpha():
+                    return None
+                return float(value)
+            
             return float(value)
         except (ValueError, TypeError):
-            return 0.0
+            return None
+    
+    def _safe_int(self, value) -> Optional[int]:
+        """Convertit en int de manière sécurisée"""
+        float_val = self._safe_float(value)
+        if float_val is not None:
+            return int(float_val)
+        return None
+    
+    def _is_numeric(self, value) -> bool:
+        """Vérifie si une valeur est numérique"""
+        return self._safe_float(value) is not None
 
 
 if __name__ == "__main__":
