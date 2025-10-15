@@ -90,8 +90,8 @@ class FootballRecruitmentAnalyzer:
                 'passes': len(player_events[player_events['type'] == 'Pass']),
                 'passes_completed': len(player_events[(player_events['type'] == 'Pass') & 
                                                        (player_events['pass_outcome'].isna())]),
-                'key_passes': len(player_events[player_events['pass_shot_assist'] == True]),
-                'assists': len(player_events[player_events['pass_goal_assist'] == True]),
+                'key_passes': len(player_events[player_events.get('pass_shot_assist', pd.Series([False])) == True]) if 'pass_shot_assist' in player_events.columns else 0,
+                'assists': len(player_events[player_events.get('pass_goal_assist', pd.Series([False])) == True]) if 'pass_goal_assist' in player_events.columns else 0,
                 
                 # Statistiques de tirs
                 'shots': len(player_events[player_events['type'] == 'Shot']),
