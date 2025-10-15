@@ -1,5 +1,5 @@
 # Requirements pour l'application de recrutement football
-# Compatible Python 3.13
+# Compatible Python 3.11+
 
 # Data Science & ML
 pandas>=2.2.0
@@ -23,3 +23,6 @@ streamlit>=1.32.0
 
 # Utils
 requests>=2.31.0
+
+# Gestion des warnings
+warnings
