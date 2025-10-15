@@ -23,6 +23,3 @@ streamlit>=1.32.0
 
 # Utils
 requests>=2.31.0
-
-# Gestion des warnings
-warnings
