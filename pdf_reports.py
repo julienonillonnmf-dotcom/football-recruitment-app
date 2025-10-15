@@ -63,6 +63,7 @@ class ScoutingReportGenerator:
             
         except Exception as e:
             print(f"❌ Erreur génération PDF: {e}")
+            raise e
     
     def _create_cover_page(self, pdf: PdfPages, player_data: pd.Series):
         """Page de garde"""
@@ -151,6 +152,7 @@ class ScoutingReportGenerator:
             y_pos -= 0.05
             ax.text(0.1, y_pos, verdict,
                    fontsize=11, transform=ax.transAxes,
+                   wrap=True,
                    bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
             
             pdf.savefig(fig, bbox_inches='tight')
@@ -171,7 +173,7 @@ class ScoutingReportGenerator:
                 'Dribbles': ['dribbles_per_90', 'dribble_success_rate'],
                 'Défensif': ['tackles_per_90', 'interceptions_per_90'],
                 'Physique': ['fouls_committed', 'fouls_won'],
-                'Global': ['efficiency_score', 'matches_played']
+                'Global': ['matches_played']
             }
             
             for idx, (category, metrics) in enumerate(categories.items()):
@@ -184,8 +186,12 @@ class ScoutingReportGenerator:
                     if metric in player_data.index:
                         val = player_data[metric]
                         if pd.notna(val):
-                            values.append(float(val))
-                            labels.append(metric.replace('_', ' ').title())
+                            try:
+                                values.append(float(val))
+                                labels.append(metric.replace('_', ' ').title())
+                            except (ValueError, TypeError):
+                                # Ignorer les valeurs non numériques
+                                pass
                 
                 if values:
                     bars = ax.barh(labels, values, color='steelblue', alpha=0.7)
@@ -225,7 +231,11 @@ class ScoutingReportGenerator:
                 available_cols = [c for c in cols if c in similar.columns]
                 
                 if available_cols:
-                    table_data = similar[available_cols].head(10)
+                    table_data = similar[available_cols].head(10).copy()
+                    
+                    # Formater les valeurs
+                    if 'similarity_score' in table_data.columns:
+                        table_data['similarity_score'] = table_data['similarity_score'].apply(lambda x: f'{x:.2f}' if pd.notna(x) else 'N/A')
                     
                     table = ax.table(
                         cellText=table_data.values,
@@ -268,7 +278,7 @@ class ScoutingReportGenerator:
             y_pos = 0.85
             for i, rec in enumerate(recommendations, 1):
                 ax.text(0.1, y_pos, f'{i}. {rec}',
-                       fontsize=12, transform=ax.transAxes)
+                       fontsize=12, transform=ax.transAxes, wrap=True)
                 y_pos -= 0.08
             
             ax.text(0.5, 0.15,
@@ -287,18 +297,25 @@ class ScoutingReportGenerator:
         strengths = []
         
         try:
-            if player_data.get('goals_per_90', 0) > 0.5:
+            # ✅ Utiliser des conversions sécurisées
+            goals_per_90 = self._safe_float(player_data.get('goals_per_90', 0))
+            pass_rate = self._safe_float(player_data.get('pass_completion_rate', 0))
+            dribble_rate = self._safe_float(player_data.get('dribble_success_rate', 0))
+            tackles = self._safe_float(player_data.get('tackles_per_90', 0))
+            assists = self._safe_float(player_data.get('assists_per_90', 0))
+            
+            if goals_per_90 > 0.5:
                 strengths.append('Excellent finisseur')
-            if player_data.get('pass_completion_rate', 0) > 85:
+            if pass_rate > 85:
                 strengths.append('Très bonne précision de passe')
-            if player_data.get('dribble_success_rate', 0) > 65:
+            if dribble_rate > 65:
                 strengths.append('Excellent dribbleur')
-            if player_data.get('tackles_per_90', 0) > 3:
+            if tackles > 3:
                 strengths.append('Bon récupérateur')
-            if player_data.get('assists_per_90', 0) > 0.3:
+            if assists > 0.3:
                 strengths.append('Très bon créateur')
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️ Erreur dans _identify_strengths: {e}")
         
         return strengths if strengths else ['Profil équilibré']
     
@@ -307,31 +324,41 @@ class ScoutingReportGenerator:
         weaknesses = []
         
         try:
-            if player_data.get('shot_accuracy', 0) < 35:
+            shot_acc = self._safe_float(player_data.get('shot_accuracy', 50))
+            pass_rate = self._safe_float(player_data.get('pass_completion_rate', 80))
+            fouls = self._safe_float(player_data.get('fouls_committed', 0))
+            
+            if shot_acc < 35:
                 weaknesses.append('Précision des tirs à améliorer')
-            if player_data.get('pass_completion_rate', 0) < 75:
+            if pass_rate < 75:
                 weaknesses.append('Précision de passe insuffisante')
-            if player_data.get('fouls_committed', 0) > 2:
+            if fouls > 2:
                 weaknesses.append('Discipline à travailler')
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️ Erreur dans _identify_weaknesses: {e}")
         
         return weaknesses if weaknesses else ['Peu de faiblesses identifiées']
     
     def _generate_verdict(self, player_data: pd.Series) -> str:
         """Génère un verdict"""
         try:
-            score = player_data.get('efficiency_score', 50)
+            # Calculer un score simplifié
+            goals = self._safe_float(player_data.get('goals_per_90', 0))
+            assists = self._safe_float(player_data.get('assists_per_90', 0))
+            pass_rate = self._safe_float(player_data.get('pass_completion_rate', 0))
             
-            if score >= 75:
+            score = (goals * 20) + (assists * 15) + (pass_rate * 0.5)
+            
+            if score >= 40:
                 return "Joueur de haut niveau. Recommandation forte."
-            elif score >= 60:
+            elif score >= 25:
                 return "Bon joueur avec potentiel. À surveiller."
-            elif score >= 45:
+            elif score >= 15:
                 return "Joueur moyen. Rôle de rotation possible."
             else:
                 return "Profil en dessous des standards."
-        except:
+        except Exception as e:
+            print(f"⚠️ Erreur dans _generate_verdict: {e}")
             return "Évaluation nécessaire."
     
     def _generate_recommendations(self, player_data: pd.Series) -> List[str]:
@@ -339,23 +366,37 @@ class ScoutingReportGenerator:
         recs = []
         
         try:
-            matches = player_data.get('matches_played', 0)
+            matches = int(self._safe_float(player_data.get('matches_played', 0)))
+            goals = self._safe_float(player_data.get('goals_per_90', 0))
+            assists = self._safe_float(player_data.get('assists_per_90', 0))
+            tackles = self._safe_float(player_data.get('tackles_per_90', 0))
+            
             recs.append(f"Expérience: {matches} matchs cette saison")
             
-            if player_data.get('goals_per_90', 0) > 0.4:
+            if goals > 0.4:
                 recs.append("Utiliser comme option offensive prioritaire")
             
-            if player_data.get('assists_per_90', 0) > 0.25:
+            if assists > 0.25:
                 recs.append("Peut jouer un rôle de créateur")
             
-            if player_data.get('tackles_per_90', 0) > 2:
+            if tackles > 2:
                 recs.append("Contribue en phase défensive")
             
             recs.append("Intégration progressive sur 3-6 mois")
-        except:
+        except Exception as e:
+            print(f"⚠️ Erreur dans _generate_recommendations: {e}")
             recs = ["Analyse détaillée recommandée"]
         
         return recs
+    
+    def _safe_float(self, value) -> float:
+        """Convertit une valeur en float de manière sécurisée"""
+        try:
+            if pd.isna(value):
+                return 0.0
+            return float(value)
+        except (ValueError, TypeError):
+            return 0.0
 
 
 if __name__ == "__main__":
