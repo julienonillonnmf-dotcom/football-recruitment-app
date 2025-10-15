@@ -1,6 +1,6 @@
 # streamlit_app.py
 """
-Application Streamlit avec toutes les nouvelles fonctionnalités
+Application Streamlit avec toutes les fonctionnalités
 Version complète avec ML, visualisations avancées et export PDF
 """
 
@@ -14,10 +14,11 @@ import os
 # Imports des modules de base
 from football_recruitment_app import FootballRecruitmentAnalyzer
 
-# 🆕 NOUVEAUX IMPORTS
+# Nouveaux imports
 from recommendation_system import PlayerRecommendationSystem
 from advanced_visualizations import FootballVisualizer
 from pdf_reports import ScoutingReportGenerator
+from advanced_ml_system import AdvancedPlayerAnalyzer
 
 # Configuration
 st.set_page_config(
@@ -44,6 +45,8 @@ if 'analyzer' not in st.session_state:
     st.session_state.analyzer = FootballRecruitmentAnalyzer()
     st.session_state.data_loaded = False
     st.session_state.recommender = None
+    st.session_state.advanced_analyzer = None
+    st.session_state.advanced_trained = False
 
 # Titre
 st.markdown('<h1 class="main-header">⚽ Football Recruitment Pro</h1>', 
@@ -81,7 +84,7 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"❌ Erreur: {str(e)}")
     
-    # 🆕 NOUVEAU : Entraînement du système ML
+    # Entraînement ML basique
     if st.session_state.data_loaded:
         st.markdown("---")
         st.subheader("2. Machine Learning")
@@ -106,9 +109,42 @@ with st.sidebar:
         
         if st.session_state.recommender:
             st.info("🤖 Système ML actif")
+        
+        # ML Avancé
+        st.markdown("---")
+        st.subheader("3. ML Avancé 🧠")
+        
+        if st.button("🚀 Activer le système ML avancé"):
+            with st.spinner("Entraînement du système avancé..."):
+                try:
+                    df = st.session_state.player_stats
+                    
+                    # Créer et entraîner le système
+                    advanced = AdvancedPlayerAnalyzer()
+                    
+                    base_features = [
+                        'goals_per_90', 'assists_per_90', 'passes_per_90',
+                        'pass_completion_rate', 'tackles_per_90', 
+                        'interceptions_per_90', 'dribbles_per_90',
+                        'shots_per_90', 'xG_per_90'
+                    ]
+                    
+                    success = advanced.fit(df, base_features)
+                    
+                    if success:
+                        st.session_state.advanced_analyzer = advanced
+                        st.session_state.advanced_trained = True
+                        st.success("✅ Système ML avancé activé!")
+                    else:
+                        st.error("❌ Erreur d'entraînement")
+                except Exception as e:
+                    st.error(f"❌ Erreur: {e}")
+        
+        if st.session_state.advanced_trained:
+            st.info("🧠 ML Avancé actif")
     
     st.markdown("---")
-    st.subheader("3. Filtrage")
+    st.subheader("4. Filtrage")
     position = st.selectbox(
         "Position",
         ["all", "forward", "midfielder", "defender"],
@@ -129,13 +165,14 @@ if not st.session_state.data_loaded:
 df = st.session_state.player_stats
 
 # Tabs
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📊 Vue d'ensemble",
     "🔍 Joueurs similaires",
     "🎯 Clustering",
     "📈 Profils détaillés",
-    "🤖 Recommandations",  # 🆕 NOUVEAU
-    "📄 Export PDF"  # 🆕 NOUVEAU
+    "🧠 ML Avancé",
+    "🤖 Recommandations",
+    "📄 Export PDF"
 ])
 
 # ==================== TAB 1: VUE D'ENSEMBLE ====================
@@ -166,10 +203,11 @@ with tab1:
             x='goals_per_90',
             y='player',
             orientation='h',
-            title='Buts par 90 minutes',
+            title='Buts par match',
             color='goals_per_90',
             color_continuous_scale='Blues'
         )
+        st.caption("*Moyenne de buts par match")
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
@@ -181,10 +219,11 @@ with tab1:
             x='assists_per_90',
             y='player',
             orientation='h',
-            title='Passes décisives par 90 min',
+            title='Passes décisives par match',
             color='assists_per_90',
             color_continuous_scale='Greens'
         )
+        st.caption("*Moyenne de passes décisives par match")
         st.plotly_chart(fig, use_container_width=True)
 
 # ==================== TAB 2: JOUEURS SIMILAIRES ====================
@@ -312,7 +351,7 @@ with tab4:
                 for k, v in report["Statistiques défensives"].items():
                     st.metric(k, v)
             
-            # 🆕 NOUVELLES VISUALISATIONS
+            # Visualisations Avancées
             st.markdown("---")
             st.subheader("🎨 Visualisations Avancées")
             
@@ -327,11 +366,13 @@ with tab4:
                         'goals_per_90', 'assists_per_90', 'passes_per_90',
                         'tackles_per_90', 'dribbles_per_90'
                     ]
+                    # ✅ CORRECTION: Ne prendre que les colonnes numériques pour la moyenne
+                    numeric_cols = df[metrics].select_dtypes(include=['number']).columns
                     fig = viz.create_radar_chart(
                         player_data, 
                         metrics, 
                         selected_player, 
-                        df[metrics].mean()  # Moyenne uniquement des colonnes métriques
+                        df[numeric_cols].mean()
                     )
                     st.pyplot(fig)
             
@@ -341,12 +382,286 @@ with tab4:
                     fig = viz.create_ranking_chart(df, metric, top_n=15)
                     st.pyplot(fig)
 
-# ==================== TAB 5: RECOMMANDATIONS (NOUVEAU) ====================
+# ==================== TAB 5: ML AVANCÉ (NOUVEAU) ====================
 with tab5:
-    st.header("🤖 Système de Recommandation Intelligent")
+    st.header("🧠 Système ML Avancé")
+    
+    if not st.session_state.advanced_trained:
+        st.warning("⚠️ Activez d'abord le système ML avancé via la sidebar")
+    else:
+        advanced = st.session_state.advanced_analyzer
+        
+        # Sous-tabs
+        subtab1, subtab2, subtab3, subtab4 = st.tabs([
+            "🔎 Recherche Avancée",
+            "🎨 Profil Personnalisé",
+            "🔮 Prédiction",
+            "⚽ Style de Jeu"
+        ])
+        
+        # SUBTAB 1: Recherche Avancée
+        with subtab1:
+            st.subheader("🔎 Recherche similaires (Algorithme avancé)")
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                target_player = st.selectbox(
+                    "Joueur cible",
+                    sorted(df['player'].unique()),
+                    key='advanced_search_player'
+                )
+            
+            with col2:
+                top_n = st.slider("Résultats", 5, 20, 10, key='advanced_n')
+            
+            if st.button("🔍 Rechercher (ML Avancé)", type="primary"):
+                with st.spinner("Analyse en cours..."):
+                    results = advanced.find_similar_players_advanced(
+                        target_player,
+                        df,
+                        top_n=top_n
+                    )
+                    
+                    if not results.empty:
+                        st.success(f"✅ {len(results)} joueurs trouvés")
+                        
+                        # Graphique
+                        fig = px.bar(
+                            results.head(10),
+                            x='similarity_score',
+                            y='player',
+                            orientation='h',
+                            title='Score de similarité (Algorithme combiné)',
+                            color='similarity_score',
+                            color_continuous_scale='Viridis',
+                            text='similarity_score'
+                        )
+                        fig.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Tableau
+                        st.dataframe(results, use_container_width=True)
+                    else:
+                        st.warning("Aucun résultat")
+        
+        # SUBTAB 2: Profil Personnalisé
+        with subtab2:
+            st.subheader("🎨 Recherche par profil personnalisé")
+            st.info("💡 Définissez les caractéristiques idéales que vous recherchez")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("**⚽ Offensif**")
+                target_goals = st.slider("Buts/90", 0.0, 2.0, 0.5, 0.1)
+                target_assists = st.slider("Passes décisives/90", 0.0, 1.0, 0.3, 0.1)
+                target_shots = st.slider("Tirs/90", 0.0, 5.0, 2.0, 0.5)
+            
+            with col2:
+                st.markdown("**🎨 Création**")
+                target_passes = st.slider("Passes/90", 0.0, 100.0, 50.0, 5.0)
+                target_pass_rate = st.slider("% Passes réussies", 0.0, 100.0, 80.0, 5.0)
+                target_dribbles = st.slider("Dribbles/90", 0.0, 10.0, 3.0, 0.5)
+            
+            with col3:
+                st.markdown("**🛡️ Défensif**")
+                target_tackles = st.slider("Tacles/90", 0.0, 5.0, 2.0, 0.5)
+                target_interceptions = st.slider("Interceptions/90", 0.0, 3.0, 1.0, 0.5)
+            
+            tolerance = st.slider(
+                "Tolérance",
+                0.0, 0.5, 0.2, 0.05,
+                help="Plus élevé = recherche plus flexible"
+            )
+            
+            if st.button("🎯 Trouver des joueurs", type="primary"):
+                with st.spinner("Recherche..."):
+                    target_profile = {
+                        'goals_per_90': target_goals,
+                        'assists_per_90': target_assists,
+                        'shots_per_90': target_shots,
+                        'passes_per_90': target_passes,
+                        'pass_completion_rate': target_pass_rate,
+                        'dribbles_per_90': target_dribbles,
+                        'tackles_per_90': target_tackles,
+                        'interceptions_per_90': target_interceptions
+                    }
+                    
+                    results = advanced.find_by_profile(
+                        target_profile,
+                        df,
+                        top_n=15,
+                        tolerance=tolerance
+                    )
+                    
+                    if not results.empty:
+                        st.success(f"✅ {len(results)} joueurs correspondent")
+                        
+                        # Scatter
+                        if 'goals_per_90' in results.columns and 'assists_per_90' in results.columns:
+                            fig = px.scatter(
+                                results.head(10),
+                                x='goals_per_90',
+                                y='assists_per_90',
+                                size='match_score',
+                                color='match_score',
+                                hover_data=['player', 'team'],
+                                title='Joueurs correspondants',
+                                color_continuous_scale='Plasma'
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                        
+                        st.dataframe(results, use_container_width=True)
+                    else:
+                        st.warning("Aucun résultat. Augmentez la tolérance.")
+        
+        # SUBTAB 3: Prédiction
+        with subtab3:
+            st.subheader("🔮 Prédiction de performance")
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                predict_player = st.selectbox(
+                    "Joueur",
+                    sorted(df['player'].unique()),
+                    key='predict_player'
+                )
+            
+            with col2:
+                months = st.slider("Mois à prédire", 3, 24, 6, 3)
+            
+            if st.button("🔮 Prédire", type="primary"):
+                with st.spinner("Calcul..."):
+                    prediction = advanced.predict_future_performance(
+                        predict_player,
+                        df,
+                        months_ahead=months
+                    )
+                    
+                    if 'error' not in prediction:
+                        st.success("✅ Prédiction calculée")
+                        
+                        col1, col2, col3, col4 = st.columns(4)
+                        
+                        with col1:
+                            st.metric(
+                                "Actuel",
+                                f"{prediction['current_goals_per_90']:.3f}"
+                            )
+                        
+                        with col2:
+                            delta = prediction['predicted_goals_per_90'] - prediction['current_goals_per_90']
+                            st.metric(
+                                "Prédiction",
+                                f"{prediction['predicted_goals_per_90']:.3f}",
+                                f"{delta:+.3f}"
+                            )
+                        
+                        with col3:
+                            future_delta = prediction['future_prediction'] - prediction['current_goals_per_90']
+                            st.metric(
+                                f"Dans {months} mois",
+                                f"{prediction['future_prediction']:.3f}",
+                                f"{future_delta:+.3f}"
+                            )
+                        
+                        with col4:
+                            st.metric(
+                                "Confiance",
+                                f"{prediction['confidence']}%"
+                            )
+                        
+                        # Graphique tendance
+                        trend_data = pd.DataFrame({
+                            'Période': ['Actuel', 'Prédiction', f'{months} mois'],
+                            'Buts/90': [
+                                prediction['current_goals_per_90'],
+                                prediction['predicted_goals_per_90'],
+                                prediction['future_prediction']
+                            ]
+                        })
+                        
+                        fig = px.line(
+                            trend_data,
+                            x='Période',
+                            y='Buts/90',
+                            markers=True,
+                            title=f'Évolution prédite - {predict_player}',
+                            line_shape='spline'
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        if prediction['trend'] == 'positive':
+                            st.success("📈 Tendance positive")
+                        else:
+                            st.warning("📉 Tendance négative")
+                    else:
+                        st.error(f"❌ {prediction['error']}")
+        
+        # SUBTAB 4: Style de jeu
+        with subtab4:
+            st.subheader("⚽ Identification du style")
+            
+            style_player = st.selectbox(
+                "Joueur",
+                sorted(df['player'].unique()),
+                key='style_player'
+            )
+            
+            if st.button("🎯 Analyser le style", type="primary"):
+                with st.spinner("Analyse..."):
+                    style = advanced.identify_playing_style(style_player, df)
+                    
+                    if 'error' not in style:
+                        st.success(f"✅ Style identifié")
+                        
+                        st.markdown(f"### 🎯 Style: **{style['primary_style']}**")
+                        
+                        st.markdown("**Caractéristiques:**")
+                        for s in style['all_styles']:
+                            st.markdown(f"- {s}")
+                        
+                        st.markdown("---")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            st.metric("⚽ Offensif", f"{style['offensive_rating']:.1f}/10")
+                        with col2:
+                            st.metric("🛡️ Défensif", f"{style['defensive_rating']:.1f}/10")
+                        with col3:
+                            st.metric("🎨 Créatif", f"{style['creativity_rating']:.1f}/10")
+                        
+                        # Radar
+                        fig = go.Figure(data=go.Scatterpolar(
+                            r=[
+                                style['offensive_rating'],
+                                style['defensive_rating'],
+                                style['creativity_rating']
+                            ],
+                            theta=['Offensif', 'Défensif', 'Créatif'],
+                            fill='toself',
+                            name=style_player
+                        ))
+                        
+                        fig.update_layout(
+                            polar=dict(radialaxis=dict(visible=True, range=[0, 10])),
+                            title=f"Profil - {style_player}",
+                            showlegend=False
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.error(f"❌ {style['error']}")
+
+# ==================== TAB 6: RECOMMANDATIONS ====================
+with tab6:
+    st.header("🤖 Système de Recommandation")
     
     if not st.session_state.recommender:
-        st.warning("⚠️ Veuillez d'abord entraîner le système via la sidebar")
+        st.warning("⚠️ Entraînez d'abord le système via la sidebar")
     else:
         col1, col2 = st.columns(2)
         
@@ -363,17 +678,20 @@ with tab5:
                     recs = st.session_state.recommender.recommend_by_role(role, df, top_n=10)
                     
                     if not recs.empty:
-                        st.success(f"✅ {len(recs)} joueurs trouvés")
-                        st.dataframe(recs[['player', 'team', 'match_score', 'goals_per_90', 'assists_per_90']])
+                        st.success(f"✅ {len(recs)} joueurs")
+                        display_cols = ['player', 'team', 'match_score']
+                        if 'goals_per_90' in recs.columns:
+                            display_cols.extend(['goals_per_90', 'assists_per_90'])
+                        st.dataframe(recs[display_cols], use_container_width=True)
                     else:
                         st.warning("Aucun résultat")
         
         with col2:
-            st.subheader("Recherche de remplaçant")
+            st.subheader("Remplaçant")
             player_to_replace = st.selectbox("Joueur à remplacer", df['player'].unique())
             upgrade = st.slider("Facteur d'amélioration", 1.0, 1.5, 1.1, 0.1)
             
-            if st.button("🔄 Trouver des remplaçants"):
+            if st.button("🔄 Trouver remplaçants"):
                 with st.spinner("Recherche..."):
                     recs = st.session_state.recommender.recommend_replacement(
                         player_to_replace,
@@ -383,13 +701,13 @@ with tab5:
                     )
                     
                     if not recs.empty:
-                        st.success(f"✅ {len(recs)} candidats trouvés")
-                        st.dataframe(recs[['player', 'team', 'match_score']])
+                        st.success(f"✅ {len(recs)} candidats")
+                        st.dataframe(recs[['player', 'team', 'match_score']], use_container_width=True)
                     else:
                         st.warning("Aucun résultat")
 
-# ==================== TAB 6: EXPORT PDF (NOUVEAU) ====================
-with tab6:
+# ==================== TAB 7: EXPORT PDF ====================
+with tab7:
     st.header("📄 Générer un rapport PDF")
     
     player_pdf = st.selectbox(
@@ -401,10 +719,15 @@ with tab6:
     club_name = st.text_input("Nom du club", "Football Club")
     
     if st.button("📥 Générer le rapport PDF", type="primary"):
-        with st.spinner("Génération du rapport en cours..."):
+        with st.spinner("Génération..."):
             try:
-                # Données
+                # ✅ CORRECTION: Filtrer uniquement les colonnes valides
                 player_data = df[df['player'] == player_pdf].iloc[0]
+                
+                # Vérifier que player_data ne contient que des valeurs valides
+                # Exclure les colonnes textuelles problématiques
+                valid_cols = player_data.index.difference(['player', 'team'])
+                player_data_clean = player_data[valid_cols]
                 
                 # Joueurs similaires
                 similar = st.session_state.analyzer.find_similar_players(
@@ -418,12 +741,15 @@ with tab6:
                 metrics = ['goals_per_90', 'assists_per_90', 'passes_per_90', 
                           'tackles_per_90', 'dribbles_per_90']
                 
+                # Moyenne uniquement des colonnes numériques
+                numeric_metrics = [m for m in metrics if m in df.columns]
+                
                 visualizations = {
                     'radar': viz.create_radar_chart(
                         player_data,
-                        metrics,
+                        numeric_metrics,
                         player_pdf,
-                        df.mean()
+                        df[numeric_metrics].mean()
                     )
                 }
                 
@@ -450,11 +776,11 @@ with tab6:
                     
                     os.unlink(tmp.name)
                 
-                st.success("✅ Rapport généré avec succès!")
+                st.success("✅ Rapport généré!")
                 
             except Exception as e:
-                st.error(f"❌ Erreur lors de la génération: {e}")
-                st.info("💡 Astuce: Vérifiez que toutes les données sont disponibles")
+                st.error(f"❌ Erreur: {e}")
+                st.info("💡 Vérifiez que les données du joueur sont complètes")
 
 # Footer
 st.markdown("---")
