@@ -122,51 +122,53 @@ class FootballRecruitmentAnalyzer:
         return pd.DataFrame(stats_list)
     
     def _aggregate_season_stats(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Agrège les statistiques sur la saison
-        """
-        # Grouper par joueur
-        agg_stats = df.groupby(['player', 'team']).agg({
-            'match_id': 'count',  # Nombre de matchs
-            'passes': 'sum',
-            'passes_completed': 'sum',
-            'key_passes': 'sum',
-            'assists': 'sum',
-            'shots': 'sum',
-            'shots_on_target': 'sum',
-            'goals': 'sum',
-            'xG': 'sum',
-            'tackles': 'sum',
-            'interceptions': 'sum',
-            'clearances': 'sum',
-            'blocks': 'sum',
-            'dribbles': 'sum',
-            'dribbles_completed': 'sum',
-            'fouls_committed': 'sum',
-            'fouls_won': 'sum',
-        }).reset_index()
-        
-        agg_stats.rename(columns={'match_id': 'matches_played'}, inplace=True)
-        
-        # Calculer les moyennes par match
-        for col in agg_stats.columns:
-            if col not in ['player', 'team', 'matches_played']:
-                agg_stats[f'{col}_per_90'] = (agg_stats[col] / agg_stats['matches_played']) * 90
-        
-        # Calculer les ratios
-        agg_stats['pass_completion_rate'] = (agg_stats['passes_completed'] / 
-                                              agg_stats['passes'].replace(0, 1)) * 100
-        agg_stats['shot_accuracy'] = (agg_stats['shots_on_target'] / 
-                                       agg_stats['shots'].replace(0, 1)) * 100
-        agg_stats['dribble_success_rate'] = (agg_stats['dribbles_completed'] / 
-                                              agg_stats['dribbles'].replace(0, 1)) * 100
-        agg_stats['goal_conversion'] = (agg_stats['goals'] / 
-                                         agg_stats['shots'].replace(0, 1)) * 100
-        
-        # Filtrer les joueurs avec peu de matchs
-        agg_stats = agg_stats[agg_stats['matches_played'] >= 5]
-        
-        return agg_stats
+    """
+    Agrège les statistiques sur la saison
+    """
+    # Grouper par joueur
+    agg_stats = df.groupby(['player', 'team']).agg({
+        'match_id': 'count',  # Nombre de matchs
+        'passes': 'sum',
+        'passes_completed': 'sum',
+        'key_passes': 'sum',
+        'assists': 'sum',
+        'shots': 'sum',
+        'shots_on_target': 'sum',
+        'goals': 'sum',
+        'xG': 'sum',
+        'tackles': 'sum',
+        'interceptions': 'sum',
+        'clearances': 'sum',
+        'blocks': 'sum',
+        'dribbles': 'sum',
+        'dribbles_completed': 'sum',
+        'fouls_committed': 'sum',
+        'fouls_won': 'sum',
+    }).reset_index()
+    
+    agg_stats.rename(columns={'match_id': 'matches_played'}, inplace=True)
+    
+    # ✅ CORRECTION : Calculer les moyennes PAR MATCH (pas *90)
+    # Approximation : 1 match ≈ 90 minutes
+    for col in agg_stats.columns:
+        if col not in ['player', 'team', 'matches_played']:
+            # Moyenne par match (qui équivaut approximativement à "per 90")
+            agg_stats[f'{col}_per_90'] = agg_stats[col] / agg_stats['matches_played'].replace(0, 1)
+    
+    # Calculer les ratios (en %)
+    agg_stats['pass_completion_rate'] = (agg_stats['passes_completed'] / 
+                                          agg_stats['passes'].replace(0, 1)) * 100
+    agg_stats['shot_accuracy'] = (agg_stats['shots_on_target'] / 
+                                   agg_stats['shots'].replace(0, 1)) * 100
+    agg_stats['dribble_success_rate'] = (agg_stats['dribbles_completed'] / 
+                                          agg_stats['dribbles'].replace(0, 1)) * 100
+    agg_stats['goal_conversion'] = (agg_stats['goals'] / 
+                                     agg_stats['shots'].replace(0, 1)) * 100
+    
+    # Filtrer les joueurs avec peu de matchs
+    agg_stats = agg_stats[agg_stats['matches_played'] >= 5]
+    
+    return agg_stats
     
     def select_features(self, position: str = 'all') -> List[str]:
         """
