@@ -1,56 +1,61 @@
 # streamlit_app.py
 """
-Interface Streamlit pour l'application de recrutement football
-Lance avec: streamlit run streamlit_app.py
+Application Streamlit avec toutes les nouvelles fonctionnalités
+Version complète avec ML, visualisations avancées et export PDF
 """
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import tempfile
+import os
+
+# Imports des modules de base
 from football_recruitment_app import FootballRecruitmentAnalyzer
 
-# Configuration de la page
+# 🆕 NOUVEAUX IMPORTS
+from recommendation_system import PlayerRecommendationSystem
+from advanced_visualizations import FootballVisualizer
+from pdf_reports import ScoutingReportGenerator
+
+# Configuration
 st.set_page_config(
-    page_title="Football Recruitment Analyzer",
+    page_title="Football Recruitment Pro",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Style CSS personnalisé
+# Style CSS
 st.markdown("""
     <style>
     .main-header {
-        font-size: 3rem;
+        font-size: 2.5rem;
         color: #1f77b4;
         text-align: center;
-        margin-bottom: 2rem;
-    }
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 0.5rem 0;
+        margin-bottom: 1rem;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Titre
-st.markdown('<h1 class="main-header">⚽ Football Recruitment Analyzer</h1>', unsafe_allow_html=True)
-st.markdown("---")
-
-# Initialiser l'analyseur dans session_state
+# Initialisation
 if 'analyzer' not in st.session_state:
     st.session_state.analyzer = FootballRecruitmentAnalyzer()
     st.session_state.data_loaded = False
+    st.session_state.recommender = None
 
-# Sidebar - Configuration
+# Titre
+st.markdown('<h1 class="main-header">⚽ Football Recruitment Pro</h1>', 
+           unsafe_allow_html=True)
+st.markdown("---")
+
+# ==================== SIDEBAR ====================
 with st.sidebar:
     st.header("⚙️ Configuration")
     
-    # Sélection de la compétition
-    st.subheader("1. Sélection des données")
+    # Sélection compétition
+    st.subheader("1. Données")
     
     competitions = {
         "La Liga 2020/21": (11, 90),
@@ -59,15 +64,12 @@ with st.sidebar:
         "Women's World Cup 2019": (72, 30)
     }
     
-    selected_comp = st.selectbox(
-        "Compétition",
-        list(competitions.keys())
-    )
+    selected_comp = st.selectbox("Compétition", list(competitions.keys()))
     
     if st.button("📥 Charger les données", type="primary"):
         comp_id, season_id = competitions[selected_comp]
         
-        with st.spinner("Chargement des données StatsBomb..."):
+        with st.spinner("Chargement StatsBomb..."):
             try:
                 df = st.session_state.analyzer.load_statsbomb_data(comp_id, season_id)
                 if not df.empty:
@@ -75,57 +77,80 @@ with st.sidebar:
                     st.session_state.data_loaded = True
                     st.success(f"✅ {len(df)} joueurs chargés!")
                 else:
-                    st.error("❌ Erreur lors du chargement")
+                    st.error("❌ Erreur de chargement")
             except Exception as e:
                 st.error(f"❌ Erreur: {str(e)}")
     
-    st.markdown("---")
+    # 🆕 NOUVEAU : Entraînement du système ML
+    if st.session_state.data_loaded:
+        st.markdown("---")
+        st.subheader("2. Machine Learning")
+        
+        if st.button("🎓 Entraîner le système de recommandation"):
+            with st.spinner("Entraînement du modèle..."):
+                try:
+                    df = st.session_state.player_stats
+                    recommender = PlayerRecommendationSystem()
+                    
+                    features = [
+                        'goals_per_90', 'assists_per_90', 'passes_per_90',
+                        'pass_completion_rate', 'tackles_per_90', 
+                        'interceptions_per_90', 'dribbles_per_90'
+                    ]
+                    
+                    recommender.fit(df, features)
+                    st.session_state.recommender = recommender
+                    st.success("✅ Système prêt!")
+                except Exception as e:
+                    st.error(f"❌ Erreur: {e}")
+        
+        if st.session_state.recommender:
+            st.info("🤖 Système ML actif")
     
-    # Sélection de la position
-    st.subheader("2. Filtrage")
+    st.markdown("---")
+    st.subheader("3. Filtrage")
     position = st.selectbox(
         "Position",
         ["all", "forward", "midfielder", "defender"],
         format_func=lambda x: {
-            "all": "Toutes positions",
+            "all": "Toutes",
             "forward": "Attaquant",
             "midfielder": "Milieu",
             "defender": "Défenseur"
         }[x]
     )
-    
-    st.markdown("---")
-    st.info("💡 **Astuce**: Chargez d'abord les données, puis explorez les différents onglets.")
 
-# Vérifier si les données sont chargées
+# ==================== CONTENU PRINCIPAL ====================
+
 if not st.session_state.data_loaded:
-    st.warning("⚠️ Veuillez charger des données via la barre latérale pour commencer.")
+    st.warning("⚠️ Veuillez charger des données via la sidebar")
     st.stop()
 
 df = st.session_state.player_stats
 
-# Tabs principales
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📊 Vue d'ensemble", 
-    "🔍 Recherche de joueurs similaires", 
-    "🎯 Clustering", 
-    "📈 Profils détaillés"
+# Tabs
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📊 Vue d'ensemble",
+    "🔍 Joueurs similaires",
+    "🎯 Clustering",
+    "📈 Profils détaillés",
+    "🤖 Recommandations",  # 🆕 NOUVEAU
+    "📄 Export PDF"  # 🆕 NOUVEAU
 ])
 
-# TAB 1: Vue d'ensemble
+# ==================== TAB 1: VUE D'ENSEMBLE ====================
 with tab1:
-    st.header("📊 Vue d'ensemble des données")
+    st.header("📊 Vue d'ensemble")
     
     col1, col2, col3, col4 = st.columns(4)
-    
     with col1:
-        st.metric("Nombre de joueurs", len(df))
+        st.metric("Joueurs", len(df))
     with col2:
         st.metric("Équipes", df['team'].nunique())
     with col3:
-        st.metric("Total matchs", df['matches_played'].sum())
+        st.metric("Matchs", int(df['matches_played'].sum()))
     with col4:
-        st.metric("Total buts", int(df['goals'].sum()))
+        st.metric("Buts", int(df['goals'].sum()))
     
     st.markdown("---")
     
@@ -134,101 +159,59 @@ with tab1:
     
     with col1:
         st.subheader("🥇 Top 10 Buteurs")
-        top_scorers = df.nlargest(10, 'goals_per_90')[['player', 'team', 'goals_per_90', 'xG_per_90']]
+        top_scorers = df.nlargest(10, 'goals_per_90')[['player', 'team', 'goals_per_90']]
         
         fig = px.bar(
-            top_scorers, 
-            x='goals_per_90', 
+            top_scorers,
+            x='goals_per_90',
             y='player',
-            color='goals_per_90',
             orientation='h',
             title='Buts par 90 minutes',
+            color='goals_per_90',
             color_continuous_scale='Blues'
         )
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
         st.subheader("🎯 Top 10 Passeurs")
-        top_assisters = df.nlargest(10, 'assists_per_90')[['player', 'team', 'assists_per_90', 'key_passes_per_90']]
+        top_assists = df.nlargest(10, 'assists_per_90')[['player', 'team', 'assists_per_90']]
         
         fig = px.bar(
-            top_assisters, 
-            x='assists_per_90', 
+            top_assists,
+            x='assists_per_90',
             y='player',
-            color='assists_per_90',
             orientation='h',
-            title='Assists par 90 minutes',
+            title='Passes décisives par 90 min',
+            color='assists_per_90',
             color_continuous_scale='Greens'
         )
         st.plotly_chart(fig, use_container_width=True)
-    
-    # Scatter plot xG vs Goals
-    st.subheader("📈 xG vs Buts réels (par 90 min)")
-    
-    fig = px.scatter(
-        df,
-        x='xG_per_90',
-        y='goals_per_90',
-        size='shots_per_90',
-        color='team',
-        hover_name='player',
-        hover_data=['team', 'matches_played'],
-        title='Expected Goals vs Buts réels',
-        labels={'xG_per_90': 'xG par 90min', 'goals_per_90': 'Buts par 90min'}
-    )
-    
-    # Ajouter la ligne x=y
-    max_val = max(df['xG_per_90'].max(), df['goals_per_90'].max())
-    fig.add_trace(go.Scatter(
-        x=[0, max_val],
-        y=[0, max_val],
-        mode='lines',
-        name='xG = Buts',
-        line=dict(color='red', dash='dash')
-    ))
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Tableau des données
-    st.subheader("📋 Données complètes")
-    st.dataframe(
-        df[['player', 'team', 'matches_played', 'goals_per_90', 'xG_per_90', 
-            'assists_per_90', 'passes_per_90', 'pass_completion_rate']].sort_values('goals_per_90', ascending=False),
-        use_container_width=True
-    )
 
-# TAB 2: Recherche de joueurs similaires
+# ==================== TAB 2: JOUEURS SIMILAIRES ====================
 with tab2:
     st.header("🔍 Recherche de joueurs similaires")
     
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        target_player = st.selectbox(
-            "Sélectionnez un joueur",
-            sorted(df['player'].unique())
-        )
-    
+        target_player = st.selectbox("Joueur", sorted(df['player'].unique()))
     with col2:
-        n_similar = st.slider("Nombre de résultats", 3, 20, 10)
+        n_similar = st.slider("Nombre", 3, 20, 10)
     
     if st.button("🔎 Rechercher", type="primary"):
-        with st.spinner("Recherche en cours..."):
+        with st.spinner("Recherche..."):
             try:
-                similar_players = st.session_state.analyzer.find_similar_players(
-                    target_player, 
+                similar = st.session_state.analyzer.find_similar_players(
+                    target_player,
                     top_n=n_similar,
                     position=position
                 )
                 
-                st.success(f"✅ Trouvé {len(similar_players)} joueurs similaires à **{target_player}**")
+                st.success(f"✅ Trouvé {len(similar)} joueurs similaires")
                 
-                # Afficher les résultats
-                st.subheader("Résultats")
-                
-                # Créer un graphique de similarité
+                # Graphique
                 fig = px.bar(
-                    similar_players,
+                    similar,
                     x='similarity_score',
                     y='player',
                     orientation='h',
@@ -238,64 +221,23 @@ with tab2:
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Tableau détaillé
-                st.dataframe(similar_players, use_container_width=True)
-                
-                # Comparaison radar
-                st.subheader("📊 Comparaison des profils")
-                
-                features = st.session_state.analyzer.select_features(position)
-                
-                # Sélectionner quelques joueurs pour la comparaison
-                compare_players = st.multiselect(
-                    "Sélectionnez des joueurs à comparer",
-                    similar_players['player'].tolist()[:5],
-                    default=similar_players['player'].tolist()[:3]
-                )
-                
-                if compare_players:
-                    # Créer le radar chart avec Plotly
-                    fig = go.Figure()
-                    
-                    for player in [target_player] + compare_players:
-                        player_data = df[df['player'] == player]
-                        if not player_data.empty:
-                            values = []
-                            for feature in features:
-                                col_min = df[feature].min()
-                                col_max = df[feature].max()
-                                normalized = ((player_data[feature].values[0] - col_min) / (col_max - col_min)) * 100
-                                values.append(normalized)
-                            
-                            fig.add_trace(go.Scatterpolar(
-                                r=values,
-                                theta=features,
-                                fill='toself',
-                                name=player
-                            ))
-                    
-                    fig.update_layout(
-                        polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-                        showlegend=True,
-                        title="Comparaison des profils (normalisé 0-100)"
-                    )
-                    
-                    st.plotly_chart(fig, use_container_width=True)
+                # Tableau
+                st.dataframe(similar, use_container_width=True)
                 
             except Exception as e:
-                st.error(f"❌ Erreur: {str(e)}")
+                st.error(f"❌ Erreur: {e}")
 
-# TAB 3: Clustering
+# ==================== TAB 3: CLUSTERING ====================
 with tab3:
     st.header("🎯 Clustering de joueurs")
     
     col1, col2 = st.columns([1, 3])
     
     with col1:
-        n_clusters = st.slider("Nombre de clusters", 2, 10, 5)
+        n_clusters = st.slider("Clusters", 2, 10, 5)
         
-        if st.button("🎲 Créer les clusters", type="primary"):
-            with st.spinner("Création des clusters..."):
+        if st.button("🎲 Créer les clusters"):
+            with st.spinner("Création..."):
                 try:
                     clustered_df, kmeans = st.session_state.analyzer.cluster_players(
                         n_clusters=n_clusters,
@@ -304,160 +246,215 @@ with tab3:
                     st.session_state.clustered_df = clustered_df
                     st.success("✅ Clusters créés!")
                 except Exception as e:
-                    st.error(f"❌ Erreur: {str(e)}")
+                    st.error(f"❌ Erreur: {e}")
     
     if 'clustered_df' in st.session_state:
         clustered_df = st.session_state.clustered_df
         
-        # Distribution des clusters
-        st.subheader("📊 Distribution des clusters")
-        cluster_counts = clustered_df['cluster'].value_counts().sort_index()
+        # Distribution
+        cluster_counts = clustered_df['cluster'].value_counts()
         
         fig = px.bar(
             x=cluster_counts.index,
             y=cluster_counts.values,
-            labels={'x': 'Cluster', 'y': 'Nombre de joueurs'},
-            title='Répartition des joueurs par cluster',
+            labels={'x': 'Cluster', 'y': 'Nombre'},
+            title='Répartition des clusters',
             color=cluster_counts.values,
             color_continuous_scale='Viridis'
         )
         st.plotly_chart(fig, use_container_width=True)
         
-        # Visualisation 2D avec PCA
-        st.subheader("🗺️ Visualisation des clusters (PCA)")
-        
-        from sklearn.decomposition import PCA
-        
-        features = st.session_state.analyzer.select_features(position)
-        X = clustered_df[features].values
-        
-        pca = PCA(n_components=2)
-        X_pca = pca.fit_transform(st.session_state.analyzer.scaler.fit_transform(X))
-        
-        clustered_df['PC1'] = X_pca[:, 0]
-        clustered_df['PC2'] = X_pca[:, 1]
-        
-        fig = px.scatter(
-            clustered_df,
-            x='PC1',
-            y='PC2',
-            color='cluster',
-            hover_name='player',
-            hover_data=['team', 'matches_played'],
-            title=f'Clusters de joueurs (Variance expliquée: {pca.explained_variance_ratio_.sum():.2%})',
-            color_continuous_scale='Viridis'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Statistiques par cluster
-        st.subheader("📈 Statistiques moyennes par cluster")
-        
-        cluster_stats = clustered_df.groupby('cluster')[features].mean()
-        
-        fig = px.imshow(
-            cluster_stats.T,
-            labels=dict(x="Cluster", y="Métrique", color="Valeur"),
-            title="Heatmap des caractéristiques moyennes par cluster",
-            color_continuous_scale='RdYlGn',
-            aspect='auto'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
         # Joueurs par cluster
-        st.subheader("👥 Joueurs par cluster")
-        selected_cluster = st.selectbox("Sélectionnez un cluster", sorted(clustered_df['cluster'].unique()))
-        
-        cluster_players = clustered_df[clustered_df['cluster'] == selected_cluster][
-            ['player', 'team', 'matches_played'] + features
-        ].sort_values('matches_played', ascending=False)
-        
-        st.dataframe(cluster_players, use_container_width=True)
+        selected_cluster = st.selectbox("Cluster", sorted(clustered_df['cluster'].unique()))
+        cluster_players = clustered_df[clustered_df['cluster'] == selected_cluster]
+        st.dataframe(cluster_players[['player', 'team', 'matches_played']])
 
-# TAB 4: Profils détaillés
+# ==================== TAB 4: PROFILS DÉTAILLÉS ====================
 with tab4:
-    st.header("📈 Profils détaillés des joueurs")
+    st.header("📈 Profils détaillés")
     
     selected_player = st.selectbox(
-        "Sélectionnez un joueur pour voir son profil complet",
+        "Joueur",
         sorted(df['player'].unique()),
         key='profile_player'
     )
     
     if selected_player:
-        # Créer le rapport de scouting
         report = st.session_state.analyzer.create_scouting_report(selected_player)
         
         if "error" not in report:
-            # Afficher les informations de base
-            st.subheader("ℹ️ Informations générales")
+            # Informations
             col1, col2, col3 = st.columns(3)
-            
             with col1:
                 st.metric("Joueur", report["Informations"]["Joueur"])
             with col2:
                 st.metric("Équipe", report["Informations"]["Équipe"])
             with col3:
-                st.metric("Matchs joués", report["Informations"]["Matchs joués"])
+                st.metric("Matchs", report["Informations"]["Matchs joués"])
             
             st.markdown("---")
             
-            # Statistiques par catégorie
+            # Stats
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                st.subheader("⚽ Statistiques offensives")
-                for key, value in report["Statistiques offensives"].items():
-                    st.metric(key, value)
+                st.subheader("⚽ Offensif")
+                for k, v in report["Statistiques offensives"].items():
+                    st.metric(k, v)
             
             with col2:
-                st.subheader("🎨 Création de jeu")
-                for key, value in report["Statistiques de création"].items():
-                    st.metric(key, value)
+                st.subheader("🎨 Création")
+                for k, v in report["Statistiques de création"].items():
+                    st.metric(k, v)
             
             with col3:
-                st.subheader("🛡️ Statistiques défensives")
-                for key, value in report["Statistiques défensives"].items():
-                    st.metric(key, value)
+                st.subheader("🛡️ Défensif")
+                for k, v in report["Statistiques défensives"].items():
+                    st.metric(k, v)
             
+            # 🆕 NOUVELLES VISUALISATIONS
             st.markdown("---")
+            st.subheader("🎨 Visualisations Avancées")
             
-            # Radar chart du profil
-            st.subheader("📊 Profil radar")
+            viz = FootballVisualizer()
+            player_data = df[df['player'] == selected_player].iloc[0]
             
-            features = st.session_state.analyzer.select_features(position)
-            player_data = df[df['player'] == selected_player]
+            col1, col2 = st.columns(2)
             
-            if not player_data.empty:
-                values = []
-                for feature in features:
-                    col_min = df[feature].min()
-                    col_max = df[feature].max()
-                    normalized = ((player_data[feature].values[0] - col_min) / (col_max - col_min)) * 100
-                    values.append(normalized)
+            with col1:
+                if st.button("📊 Radar Chart"):
+                    metrics = [
+                        'goals_per_90', 'assists_per_90', 'passes_per_90',
+                        'tackles_per_90', 'dribbles_per_90'
+                    ]
+                    fig = viz.create_radar_chart(player_data, metrics, selected_player, df.mean())
+                    st.pyplot(fig)
+            
+            with col2:
+                if st.button("📈 Classement"):
+                    metric = st.selectbox("Métrique", ['goals_per_90', 'assists_per_90'])
+                    fig = viz.create_ranking_chart(df, metric, top_n=15)
+                    st.pyplot(fig)
+
+# ==================== TAB 5: RECOMMANDATIONS (NOUVEAU) ====================
+with tab5:
+    st.header("🤖 Système de Recommandation Intelligent")
+    
+    if not st.session_state.recommender:
+        st.warning("⚠️ Veuillez d'abord entraîner le système via la sidebar")
+    else:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Par rôle tactique")
+            role = st.selectbox(
+                "Rôle",
+                ['playmaker', 'target_man', 'winger', 'box_to_box', 'ball_winner', 'sweeper'],
+                format_func=lambda x: x.replace('_', ' ').title()
+            )
+            
+            if st.button("🔍 Rechercher par rôle"):
+                with st.spinner("Recherche..."):
+                    recs = st.session_state.recommender.recommend_by_role(role, df, top_n=10)
+                    
+                    if not recs.empty:
+                        st.success(f"✅ {len(recs)} joueurs trouvés")
+                        st.dataframe(recs[['player', 'team', 'match_score', 'goals_per_90', 'assists_per_90']])
+                    else:
+                        st.warning("Aucun résultat")
+        
+        with col2:
+            st.subheader("Recherche de remplaçant")
+            player_to_replace = st.selectbox("Joueur à remplacer", df['player'].unique())
+            upgrade = st.slider("Facteur d'amélioration", 1.0, 1.5, 1.1, 0.1)
+            
+            if st.button("🔄 Trouver des remplaçants"):
+                with st.spinner("Recherche..."):
+                    recs = st.session_state.recommender.recommend_replacement(
+                        player_to_replace,
+                        df,
+                        top_n=10,
+                        upgrade_factor=upgrade
+                    )
+                    
+                    if not recs.empty:
+                        st.success(f"✅ {len(recs)} candidats trouvés")
+                        st.dataframe(recs[['player', 'team', 'match_score']])
+                    else:
+                        st.warning("Aucun résultat")
+
+# ==================== TAB 6: EXPORT PDF (NOUVEAU) ====================
+with tab6:
+    st.header("📄 Générer un rapport PDF")
+    
+    player_pdf = st.selectbox(
+        "Sélectionnez un joueur",
+        df['player'].unique(),
+        key='pdf_select'
+    )
+    
+    club_name = st.text_input("Nom du club", "Football Club")
+    
+    if st.button("📥 Générer le rapport PDF", type="primary"):
+        with st.spinner("Génération du rapport en cours..."):
+            try:
+                # Données
+                player_data = df[df['player'] == player_pdf].iloc[0]
                 
-                fig = go.Figure()
-                
-                fig.add_trace(go.Scatterpolar(
-                    r=values,
-                    theta=features,
-                    fill='toself',
-                    name=selected_player
-                ))
-                
-                fig.update_layout(
-                    polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-                    showlegend=True,
-                    title=f"Profil de {selected_player} (percentile)"
+                # Joueurs similaires
+                similar = st.session_state.analyzer.find_similar_players(
+                    player_pdf,
+                    top_n=5,
+                    position='all'
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.error(report["error"])
+                # Visualisations
+                viz = FootballVisualizer()
+                metrics = ['goals_per_90', 'assists_per_90', 'passes_per_90', 
+                          'tackles_per_90', 'dribbles_per_90']
+                
+                visualizations = {
+                    'radar': viz.create_radar_chart(
+                        player_data,
+                        metrics,
+                        player_pdf,
+                        df.mean()
+                    )
+                }
+                
+                # Générer PDF
+                generator = ScoutingReportGenerator(club_name=club_name)
+                
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+                    generator.generate_player_report(
+                        player_data,
+                        similar,
+                        visualizations,
+                        tmp.name
+                    )
+                    
+                    # Téléchargement
+                    with open(tmp.name, 'rb') as f:
+                        st.download_button(
+                            label="📥 Télécharger le rapport PDF",
+                            data=f,
+                            file_name=f"rapport_{player_pdf.replace(' ', '_')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    
+                    os.unlink(tmp.name)
+                
+                st.success("✅ Rapport généré avec succès!")
+                
+            except Exception as e:
+                st.error(f"❌ Erreur lors de la génération: {e}")
+                st.info("💡 Astuce: Vérifiez que toutes les données sont disponibles")
 
 # Footer
 st.markdown("---")
 st.markdown("""
-    <div style='text-align: center'>
-        <p>🔥 Propulsé par StatsBomb Open Data | 💻 Développé avec Streamlit</p>
+    <div style='text-align: center; color: gray;'>
+        <p>🔥 Football Recruitment Pro | 💻 Propulsé par StatsBomb & ML</p>
     </div>
 """, unsafe_allow_html=True)
