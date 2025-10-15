@@ -327,7 +327,12 @@ with tab4:
                         'goals_per_90', 'assists_per_90', 'passes_per_90',
                         'tackles_per_90', 'dribbles_per_90'
                     ]
-                    fig = viz.create_radar_chart(player_data, metrics, selected_player, df.mean())
+                    fig = viz.create_radar_chart(
+                        player_data, 
+                        metrics, 
+                        selected_player, 
+                        df[metrics].mean()  # Moyenne uniquement des colonnes métriques
+                    )
                     st.pyplot(fig)
             
             with col2:
