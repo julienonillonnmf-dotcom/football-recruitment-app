@@ -1,7 +1,7 @@
 # football_recruitment_app.py
 """
 Application d'analyse de recrutement football avec Machine Learning
-Utilise les données StatsBomb pour identifier des joueurs similaires
+Version ULTRA : Exploite 100+ métriques depuis StatsBomb
 """
 
 import pandas as pd
@@ -17,9 +17,19 @@ from typing import List, Dict, Tuple
 import warnings
 warnings.filterwarnings('ignore')
 
+# Import du système ULTRA
+try:
+    from ultra_advanced_metrics import UltraAdvancedMetricsExtractor
+    ULTRA_AVAILABLE = True
+except ImportError:
+    ULTRA_AVAILABLE = False
+    print("⚠️ ultra_advanced_metrics.py non trouvé - Mode ULTRA désactivé")
+
 class FootballRecruitmentAnalyzer:
     """
     Classe principale pour l'analyse de recrutement
+    Mode Normal : 35 features
+    Mode ULTRA : 100+ features
     """
     
     def __init__(self):
@@ -29,7 +39,7 @@ class FootballRecruitmentAnalyzer:
         
     def load_statsbomb_data(self, competition_id: int, season_id: int) -> pd.DataFrame:
         """
-        Charge les données StatsBomb pour une compétition/saison
+        Charge les données StatsBomb - MODE NORMAL (35 features)
         
         Args:
             competition_id: ID de la compétition (ex: 11 pour La Liga)
@@ -38,22 +48,16 @@ class FootballRecruitmentAnalyzer:
         Returns:
             DataFrame avec les statistiques des joueurs
         """
-        print(f"📥 Chargement des données - Competition: {competition_id}, Season: {season_id}")
+        print(f"📥 Chargement MODE NORMAL - Competition: {competition_id}, Season: {season_id}")
         
-        # Récupérer tous les matchs
         matches = sb.matches(competition_id=competition_id, season_id=season_id)
-        
         all_players_stats = []
         
-        # Parcourir chaque match
         for idx, match in matches.iterrows():
             match_id = match['match_id']
             
             try:
-                # Récupérer les events du match
                 events = sb.events(match_id=match_id)
-                
-                # Calculer les stats par joueur pour ce match
                 match_stats = self._calculate_match_stats(events, match_id)
                 all_players_stats.append(match_stats)
                 
@@ -61,11 +65,60 @@ class FootballRecruitmentAnalyzer:
                 print(f"⚠️  Erreur pour match {match_id}: {e}")
                 continue
         
-        # Combiner toutes les stats
         if all_players_stats:
             self.player_stats = pd.concat(all_players_stats, ignore_index=True)
             self.player_stats = self._aggregate_season_stats(self.player_stats)
             print(f"✅ Données chargées: {len(self.player_stats)} joueurs")
+            print(f"📊 Features: {len(self.player_stats.columns)} colonnes")
+            return self.player_stats
+        else:
+            print("❌ Aucune donnée chargée")
+            return pd.DataFrame()
+    
+    def load_statsbomb_data_ultra(self, competition_id: int, season_id: int) -> pd.DataFrame:
+        """
+        🆕 ULTRA MODE : Charge avec TOUTES les métriques (100+ features)
+        
+        Args:
+            competition_id: ID de la compétition
+            season_id: ID de la saison
+            
+        Returns:
+            DataFrame avec 100+ statistiques par joueur
+        """
+        if not ULTRA_AVAILABLE:
+            print("❌ Mode ULTRA non disponible - ultra_advanced_metrics.py manquant")
+            return self.load_statsbomb_data(competition_id, season_id)
+        
+        print(f"🚀 Chargement MODE ULTRA - Competition: {competition_id}, Season: {season_id}")
+        print("⏳ Extraction de 100+ métriques... (cela peut prendre 30-60 secondes)")
+        
+        matches = sb.matches(competition_id=competition_id, season_id=season_id)
+        all_players_stats = []
+        
+        for idx, match in matches.iterrows():
+            match_id = match['match_id']
+            
+            try:
+                events = sb.events(match_id=match_id)
+                
+                # Extraction ULTRA avec toutes les métriques
+                extractor = UltraAdvancedMetricsExtractor()
+                match_stats = extractor.extract_all_metrics(events, match_id)
+                all_players_stats.append(match_stats)
+                
+            except Exception as e:
+                print(f"⚠️  Erreur pour match {match_id}: {e}")
+                continue
+        
+        if all_players_stats:
+            self.player_stats = pd.concat(all_players_stats, ignore_index=True)
+            self.player_stats = self._aggregate_season_stats(self.player_stats)
+            
+            print(f"✅ Données ULTRA chargées: {len(self.player_stats)} joueurs")
+            print(f"📊 Features: {len(self.player_stats.columns)} colonnes")
+            print(f"🎯 Gain vs mode normal: +{len(self.player_stats.columns) - 35} features !")
+            
             return self.player_stats
         else:
             print("❌ Aucune donnée chargée")
@@ -73,11 +126,10 @@ class FootballRecruitmentAnalyzer:
     
     def _calculate_match_stats(self, events: pd.DataFrame, match_id: int) -> pd.DataFrame:
         """
-        Calcule les statistiques par joueur pour un match
+        Calcule les statistiques par joueur pour un match (MODE NORMAL)
         """
         stats_list = []
         
-        # Grouper par joueur
         for player in events['player'].dropna().unique():
             player_events = events[events['player'] == player]
             
@@ -126,44 +178,38 @@ class FootballRecruitmentAnalyzer:
         Agrège les statistiques sur la saison
         """
         # Grouper par joueur
-        agg_stats = df.groupby(['player', 'team']).agg({
-            'match_id': 'count',  # Nombre de matchs
-            'passes': 'sum',
-            'passes_completed': 'sum',
-            'key_passes': 'sum',
-            'assists': 'sum',
-            'shots': 'sum',
-            'shots_on_target': 'sum',
-            'goals': 'sum',
-            'xG': 'sum',
-            'tackles': 'sum',
-            'interceptions': 'sum',
-            'clearances': 'sum',
-            'blocks': 'sum',
-            'dribbles': 'sum',
-            'dribbles_completed': 'sum',
-            'fouls_committed': 'sum',
-            'fouls_won': 'sum',
-        }).reset_index()
+        agg_dict = {'match_id': 'count'}
         
+        # Dynamiquement agréger toutes les colonnes numériques
+        for col in df.columns:
+            if col not in ['player', 'team', 'match_id'] and pd.api.types.is_numeric_dtype(df[col]):
+                agg_dict[col] = 'sum'
+        
+        agg_stats = df.groupby(['player', 'team']).agg(agg_dict).reset_index()
         agg_stats.rename(columns={'match_id': 'matches_played'}, inplace=True)
         
-        # ✅ CORRECTION : Calculer les moyennes PAR MATCH (pas *90)
-        # Approximation : 1 match ≈ 90 minutes
+        # Calculer les moyennes par match
         for col in agg_stats.columns:
             if col not in ['player', 'team', 'matches_played']:
-                # Moyenne par match (qui équivaut approximativement à "per 90")
-                agg_stats[f'{col}_per_90'] = agg_stats[col] / agg_stats['matches_played'].replace(0, 1)
+                if pd.api.types.is_numeric_dtype(agg_stats[col]):
+                    agg_stats[f'{col}_per_90'] = agg_stats[col] / agg_stats['matches_played'].replace(0, 1)
         
-        # Calculer les ratios (en %)
-        agg_stats['pass_completion_rate'] = (agg_stats['passes_completed'] / 
-                                              agg_stats['passes'].replace(0, 1)) * 100
-        agg_stats['shot_accuracy'] = (agg_stats['shots_on_target'] / 
-                                       agg_stats['shots'].replace(0, 1)) * 100
-        agg_stats['dribble_success_rate'] = (agg_stats['dribbles_completed'] / 
-                                              agg_stats['dribbles'].replace(0, 1)) * 100
-        agg_stats['goal_conversion'] = (agg_stats['goals'] / 
-                                         agg_stats['shots'].replace(0, 1)) * 100
+        # Calculer les ratios de base
+        if 'passes' in agg_stats.columns and 'passes_completed' in agg_stats.columns:
+            agg_stats['pass_completion_rate'] = (agg_stats['passes_completed'] / 
+                                                  agg_stats['passes'].replace(0, 1)) * 100
+        
+        if 'shots' in agg_stats.columns and 'shots_on_target' in agg_stats.columns:
+            agg_stats['shot_accuracy'] = (agg_stats['shots_on_target'] / 
+                                           agg_stats['shots'].replace(0, 1)) * 100
+        
+        if 'dribbles' in agg_stats.columns and 'dribbles_completed' in agg_stats.columns:
+            agg_stats['dribble_success_rate'] = (agg_stats['dribbles_completed'] / 
+                                                  agg_stats['dribbles'].replace(0, 1)) * 100
+        
+        if 'shots' in agg_stats.columns and 'goals' in agg_stats.columns:
+            agg_stats['goal_conversion'] = (agg_stats['goals'] / 
+                                             agg_stats['shots'].replace(0, 1)) * 100
         
         # Filtrer les joueurs avec peu de matchs
         agg_stats = agg_stats[agg_stats['matches_played'] >= 5]
@@ -173,9 +219,6 @@ class FootballRecruitmentAnalyzer:
     def select_features(self, position: str = 'all') -> List[str]:
         """
         Sélectionne les features pertinentes selon la position
-        
-        Args:
-            position: 'forward', 'midfielder', 'defender', 'all'
         """
         base_features = ['passes_per_90', 'pass_completion_rate']
         
@@ -202,6 +245,10 @@ class FootballRecruitmentAnalyzer:
                 'dribbles_per_90', 'dribble_success_rate'
             ]
         
+        # Filtrer les features qui existent réellement dans le DataFrame
+        if self.player_stats is not None:
+            self.key_metrics = [m for m in self.key_metrics if m in self.player_stats.columns]
+        
         return self.key_metrics
     
     def find_similar_players(self, 
@@ -210,46 +257,30 @@ class FootballRecruitmentAnalyzer:
                             position: str = 'all') -> pd.DataFrame:
         """
         Trouve les joueurs similaires à un joueur cible
-        
-        Args:
-            target_player: Nom du joueur cible
-            top_n: Nombre de joueurs similaires à retourner
-            position: Position pour filtrer les features
-            
-        Returns:
-            DataFrame avec les joueurs similaires et leur score de similarité
         """
         if self.player_stats is None:
-            raise ValueError("Chargez d'abord les données avec load_statsbomb_data()")
+            raise ValueError("Chargez d'abord les données")
         
-        # Sélectionner les features
         features = self.select_features(position)
         
-        # Préparer les données
         df = self.player_stats.copy()
         df = df.dropna(subset=features)
         
-        # Vérifier que le joueur existe
         if target_player not in df['player'].values:
-            raise ValueError(f"Joueur '{target_player}' non trouvé dans les données")
+            raise ValueError(f"Joueur '{target_player}' non trouvé")
         
-        # Normaliser les features
         X = df[features].values
         X_scaled = self.scaler.fit_transform(X)
         
-        # Trouver l'index du joueur cible
         target_idx = df[df['player'] == target_player].index[0]
         target_vector = X_scaled[df.index == target_idx]
         
-        # Calculer la similarité cosinus
         similarities = cosine_similarity(target_vector, X_scaled)[0]
         
-        # Créer un DataFrame avec les résultats
         results = df.copy()
         results['similarity_score'] = similarities
         results = results.sort_values('similarity_score', ascending=False)
         
-        # Exclure le joueur lui-même et prendre les top_n
         results = results[results['player'] != target_player].head(top_n)
         
         return results[['player', 'team', 'matches_played', 'similarity_score'] + features]
@@ -259,29 +290,18 @@ class FootballRecruitmentAnalyzer:
                        position: str = 'all') -> Tuple[pd.DataFrame, KMeans]:
         """
         Crée des clusters de joueurs avec des profils similaires
-        
-        Args:
-            n_clusters: Nombre de clusters
-            position: Position pour filtrer les features
-            
-        Returns:
-            DataFrame avec les clusters et le modèle KMeans
         """
         if self.player_stats is None:
-            raise ValueError("Chargez d'abord les données avec load_statsbomb_data()")
+            raise ValueError("Chargez d'abord les données")
         
-        # Sélectionner les features
         features = self.select_features(position)
         
-        # Préparer les données
         df = self.player_stats.copy()
         df = df.dropna(subset=features)
         
-        # Normaliser
         X = df[features].values
         X_scaled = self.scaler.fit_transform(X)
         
-        # Clustering
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
         df['cluster'] = kmeans.fit_predict(X_scaled)
         
@@ -297,14 +317,12 @@ class FootballRecruitmentAnalyzer:
         features = self.select_features(position)
         df = self.player_stats.copy()
         
-        # Récupérer les données du joueur
         player_data = df[df['player'] == player_name]
         
         if player_data.empty:
             print(f"❌ Joueur '{player_name}' non trouvé")
             return
         
-        # Normaliser entre 0 et 100
         values = []
         for feature in features:
             col_min = df[feature].min()
@@ -312,9 +330,8 @@ class FootballRecruitmentAnalyzer:
             normalized = ((player_data[feature].values[0] - col_min) / (col_max - col_min)) * 100
             values.append(normalized)
         
-        # Créer le radar chart
         angles = np.linspace(0, 2 * np.pi, len(features), endpoint=False).tolist()
-        values += values[:1]  # Fermer le polygone
+        values += values[:1]
         angles += angles[:1]
         
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
@@ -351,62 +368,39 @@ class FootballRecruitmentAnalyzer:
                 "Matchs joués": int(player_data['matches_played'])
             },
             "Statistiques offensives": {
-                "Buts/90": round(player_data['goals_per_90'], 2),
-                "xG/90": round(player_data['xG_per_90'], 2),
-                "Assists/90": round(player_data['assists_per_90'], 2),
-                "Passes clés/90": round(player_data['key_passes_per_90'], 2),
-                "Tirs/90": round(player_data['shots_per_90'], 2),
-                "Précision tirs (%)": round(player_data['shot_accuracy'], 1)
+                "Buts/90": round(player_data.get('goals_per_90', 0), 2),
+                "xG/90": round(player_data.get('xG_per_90', 0), 2),
+                "Assists/90": round(player_data.get('assists_per_90', 0), 2),
+                "Passes clés/90": round(player_data.get('key_passes_per_90', 0), 2),
+                "Tirs/90": round(player_data.get('shots_per_90', 0), 2),
+                "Précision tirs (%)": round(player_data.get('shot_accuracy', 0), 1)
             },
             "Statistiques de création": {
-                "Passes/90": round(player_data['passes_per_90'], 1),
-                "Taux de passe (%)": round(player_data['pass_completion_rate'], 1),
-                "Dribbles/90": round(player_data['dribbles_per_90'], 2),
-                "Réussite dribbles (%)": round(player_data['dribble_success_rate'], 1)
+                "Passes/90": round(player_data.get('passes_per_90', 0), 1),
+                "Taux de passe (%)": round(player_data.get('pass_completion_rate', 0), 1),
+                "Dribbles/90": round(player_data.get('dribbles_per_90', 0), 2),
+                "Réussite dribbles (%)": round(player_data.get('dribble_success_rate', 0), 1)
             },
             "Statistiques défensives": {
-                "Tacles/90": round(player_data['tackles_per_90'], 2),
-                "Interceptions/90": round(player_data['interceptions_per_90'], 2),
-                "Dégagements/90": round(player_data['clearances_per_90'], 2)
+                "Tacles/90": round(player_data.get('tackles_per_90', 0), 2),
+                "Interceptions/90": round(player_data.get('interceptions_per_90', 0), 2),
+                "Dégagements/90": round(player_data.get('clearances_per_90', 0), 2)
             }
         }
         
         return report
 
 
-# Exemple d'utilisation
 if __name__ == "__main__":
-    
-    # Initialiser l'analyseur
     analyzer = FootballRecruitmentAnalyzer()
     
-    # Charger les données (exemple: La Liga 2020/21)
     print("🚀 Démarrage de l'analyse...")
+    print(f"Mode ULTRA disponible: {'✅ OUI' if ULTRA_AVAILABLE else '❌ NON'}")
     
-    # Note: Utiliser les ID de compétitions/saisons disponibles dans StatsBomb Open Data
-    # Competition 11 = La Liga, Season 90 = 2020/21
+    # Test mode normal
     df = analyzer.load_statsbomb_data(competition_id=11, season_id=90)
     
     if not df.empty:
         print("\n📊 Aperçu des données:")
-        print(df[['player', 'team', 'matches_played', 'goals_per_90', 'xG_per_90']].head(10))
-        
-        # Trouver des joueurs similaires
-        try:
-            target = df['player'].iloc[0]  # Premier joueur comme exemple
-            print(f"\n🔍 Recherche de joueurs similaires à: {target}")
-            similar = analyzer.find_similar_players(target, top_n=5, position='forward')
-            print("\nJoueurs similaires:")
-            print(similar[['player', 'team', 'similarity_score']])
-        except Exception as e:
-            print(f"Erreur lors de la recherche: {e}")
-        
-        # Clustering
-        print("\n🎯 Création de clusters de joueurs...")
-        clustered_df, kmeans = analyzer.cluster_players(n_clusters=4, position='all')
-        print("\nDistribution des clusters:")
-        print(clustered_df['cluster'].value_counts())
-        
+        print(df[['player', 'team', 'matches_played', 'goals_per_90']].head(10))
         print("\n✅ Analyse terminée!")
-    else:
-        print("❌ Échec du chargement des données")
