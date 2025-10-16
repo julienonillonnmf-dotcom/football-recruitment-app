@@ -17,6 +17,7 @@ from recommendation_system import PlayerRecommendationSystem
 from advanced_visualizations import FootballVisualizer
 from pdf_reports import ScoutingReportGenerator
 from advanced_ml_system import AdvancedPlayerAnalyzer
+from advanced_visualizations import AdvancedPlayerVisualizations
 
 # Configuration
 st.set_page_config(
