@@ -100,7 +100,7 @@ col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     st.markdown("""
         <h1 style='text-align: center;'>
-            ⚽ Football Recruitment Pro
+            ⚽ Application de recrutement
         </h1>
         <p style='text-align: center; color: gray; font-size: 14px;'>
             Analyse avancée et recrutement intelligent avec IA & Machine Learning
