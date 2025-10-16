@@ -113,16 +113,16 @@ st.markdown("---")
 with st.sidebar:
     st.markdown("## ⚙️ Configuration")
     
-    # Choix de la compétition
+     # Choix de la compétition - CORRIGÉ ✅
     competitions = {
-        "La Liga 2020/21": (11, 90),
-        "Premier League 2020/21": (9, 42),
-        "UEFA Euro 2020": (55, 43),
-        "Champions League 2020/21": (16, 41),
-        "World Cup 2022": (43, 106),
-        "Ligue 1 2020/21": (7, 33),
-        "Serie A 2020/21": (12, 27),
-        "Bundesliga 2020/21": (8, 28),
+        "⭐ La Liga 2020/21": (11, 90),
+        "⭐ Premier League 2020/21": (9, 42),
+        "⭐ Champions League 2020/21": (16, 41),
+        "⭐ World Cup 2022": (43, 106),
+        "⭐ UEFA Euro 2020": (55, 43),
+        "Premier League 2003/04": (9, 27),
+        "La Liga 2019/20": (11, 52),
+        "Champions League 2018/19": (16, 4),
         "World Cup 2018": (43, 3),
         "FA Women's Super League 2020/21": (37, 42),
     }
