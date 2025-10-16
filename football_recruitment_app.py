@@ -125,9 +125,7 @@ class FootballRecruitmentAnalyzer:
             return pd.DataFrame()
     
     def _calculate_match_stats(self, events: pd.DataFrame, match_id: int) -> pd.DataFrame:
-        """
-        Calcule les statistiques par joueur pour un match (MODE NORMAL)
-        """
+        """Calcule les statistiques par joueur pour un match (MODE NORMAL)"""
         stats_list = []
         
         for player in events['player'].dropna().unique():
@@ -174,9 +172,7 @@ class FootballRecruitmentAnalyzer:
         return pd.DataFrame(stats_list)
     
     def _aggregate_season_stats(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Agrège les statistiques sur la saison
-        """
+        """Agrège les statistiques sur la saison"""
         # Grouper par joueur
         agg_dict = {'match_id': 'count'}
         
@@ -217,9 +213,7 @@ class FootballRecruitmentAnalyzer:
         return agg_stats
     
     def select_features(self, position: str = 'all') -> List[str]:
-        """
-        Sélectionne les features pertinentes selon la position
-        """
+        """Sélectionne les features pertinentes selon la position"""
         base_features = ['passes_per_90', 'pass_completion_rate']
         
         if position == 'forward':
@@ -255,9 +249,7 @@ class FootballRecruitmentAnalyzer:
                             target_player: str, 
                             top_n: int = 10,
                             position: str = 'all') -> pd.DataFrame:
-        """
-        Trouve les joueurs similaires à un joueur cible
-        """
+        """Trouve les joueurs similaires à un joueur cible"""
         if self.player_stats is None:
             raise ValueError("Chargez d'abord les données")
         
@@ -288,9 +280,7 @@ class FootballRecruitmentAnalyzer:
     def cluster_players(self, 
                        n_clusters: int = 5, 
                        position: str = 'all') -> Tuple[pd.DataFrame, KMeans]:
-        """
-        Crée des clusters de joueurs avec des profils similaires
-        """
+        """Crée des clusters de joueurs avec des profils similaires"""
         if self.player_stats is None:
             raise ValueError("Chargez d'abord les données")
         
@@ -308,9 +298,7 @@ class FootballRecruitmentAnalyzer:
         return df, kmeans
     
     def visualize_player_profile(self, player_name: str, position: str = 'all'):
-        """
-        Crée un radar chart du profil du joueur
-        """
+        """Crée un radar chart du profil du joueur"""
         if self.player_stats is None:
             raise ValueError("Chargez d'abord les données")
         
@@ -348,9 +336,7 @@ class FootballRecruitmentAnalyzer:
         return fig
     
     def create_scouting_report(self, player_name: str) -> Dict:
-        """
-        Crée un rapport de scouting complet
-        """
+        """Crée un rapport de scouting complet"""
         if self.player_stats is None:
             raise ValueError("Chargez d'abord les données")
         
