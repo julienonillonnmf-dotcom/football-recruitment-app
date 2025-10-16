@@ -939,7 +939,7 @@ with tab3:
                         orientation='h',
                         title=f'Remplaçants pour {departing} (facteur {upgrade}x)',
                         color='match_score',
-                        color_continuous_scale='Turbo',
+                        color_continuous_scale='Viridis',
                         text='match_score',
                         hover_data=['team', 'matches_played']
                     )
@@ -951,7 +951,7 @@ with tab3:
                     
                     # Tableau
                     st.dataframe(
-                        results.style.background_gradient(subset=['match_score'], cmap='Turbo'),
+                        results.style.background_gradient(subset=['match_score'], cmap='RdYlGn'),
                         use_container_width=True,
                         height=400
                     )
