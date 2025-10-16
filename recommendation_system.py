@@ -9,6 +9,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import NearestNeighbors
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics.pairwise import cosine_similarity
 from typing import List, Dict, Optional
 import warnings
 warnings.filterwarnings('ignore')
@@ -23,6 +24,7 @@ class PlayerRecommendationSystem:
         self.performance_model = None
         self.features = []
         self.is_fitted = False
+        self.data_for_fit = None  # Pour stocker les données d'entraînement
         
     def fit(self, df: pd.DataFrame, features: List[str]):
         """Entraîne les modèles de recommandation"""
@@ -44,6 +46,9 @@ class PlayerRecommendationSystem:
             if len(X) < 2:
                 print("❌ Pas assez de données pour entraîner")
                 return
+            
+            # Stocker les données pour référence
+            self.data_for_fit = df.copy()
             
             # Scaler
             X_scaled = self.scaler.fit_transform(X)
@@ -85,6 +90,12 @@ class PlayerRecommendationSystem:
             target_vector = np.array([
                 target_profile.get(f, 0) for f in self.features
             ]).reshape(1, -1)
+            
+            # Vérifier que le vecteur a la bonne dimension
+            if target_vector.shape[1] != len(self.features):
+                print(f"❌ Dimension incorrecte: attendu {len(self.features)}, reçu {target_vector.shape[1]}")
+                return pd.DataFrame()
+            
             target_scaled = self.scaler.transform(target_vector)
             
             # Appliquer les filtres
@@ -98,25 +109,34 @@ class PlayerRecommendationSystem:
             if filtered_df.empty:
                 return pd.DataFrame()
             
-            # Calculer les distances
-            X = filtered_df[self.features].fillna(0).values
-            X_scaled = self.scaler.transform(X)
+            # Préparer les données filtrées
+            X_filtered = filtered_df[self.features].fillna(0).values
             
-            n_neighbors = min(top_n, len(filtered_df))
-            distances, indices = self.knn_model.kneighbors(
-                target_scaled,
-                n_neighbors=n_neighbors
-            )
+            # Vérifier les dimensions
+            if X_filtered.shape[1] != target_vector.shape[1]:
+                print(f"❌ Dimensions incompatibles: X={X_filtered.shape}, target={target_vector.shape}")
+                return pd.DataFrame()
             
-            # Résultats
-            results = filtered_df.iloc[indices[0]].copy()
-            results['match_score'] = 100 - (distances[0] * 50)
+            X_filtered_scaled = self.scaler.transform(X_filtered)
+            
+            # Calculer les similarités directement (plus fiable que KNN sur données filtrées)
+            similarities = cosine_similarity(target_scaled, X_filtered_scaled)[0]
+            
+            # Créer le résultat
+            results = filtered_df.copy()
+            results['match_score'] = (1 - similarities) * 100  # Convertir distance en score
+            results['match_score'] = 100 - results['match_score']  # Inverser pour que 100 = parfait
             results['match_score'] = results['match_score'].clip(0, 100)
             
-            return results.sort_values('match_score', ascending=False)
+            # Trier et limiter
+            results = results.sort_values('match_score', ascending=False).head(top_n)
+            
+            return results
             
         except Exception as e:
             print(f"❌ Erreur recommandation: {e}")
+            import traceback
+            traceback.print_exc()
             return pd.DataFrame()
     
     def recommend_by_role(self,
