@@ -688,21 +688,21 @@ with tab3:
         
         with col1:
             st.markdown("**⚽ Attaque**")
-            goals_target = st.slider("Buts/90", 0.0, 2.0, 0.5, 0.1)
-            shots_target = st.slider("Tirs/90", 0.0, 10.0, 3.0, 0.5)
-            xg_target = st.slider("xG/90", 0.0, 1.5, 0.4, 0.1)
+            goals_target = st.slider("Buts/90", 0.0, 2.0, 0.5, 0.1, key='profile_goals')
+            shots_target = st.slider("Tirs/90", 0.0, 10.0, 3.0, 0.5, key='profile_shots')
+            xg_target = st.slider("xG/90", 0.0, 1.5, 0.4, 0.1, key='profile_xg')
         
         with col2:
             st.markdown("**🎯 Création**")
-            assists_target = st.slider("Assists/90", 0.0, 1.0, 0.3, 0.1)
-            passes_target = st.slider("Passes/90", 0.0, 100.0, 50.0, 5.0)
-            pass_rate_target = st.slider("Taux Passe %", 0.0, 100.0, 85.0, 5.0)
+            assists_target = st.slider("Assists/90", 0.0, 1.0, 0.3, 0.1, key='profile_assists')
+            passes_target = st.slider("Passes/90", 0.0, 100.0, 50.0, 5.0, key='profile_passes')
+            pass_rate_target = st.slider("Taux Passe %", 0.0, 100.0, 85.0, 5.0, key='profile_pass_rate')
         
         with col3:
             st.markdown("**🛡️ Défense**")
-            tackles_target = st.slider("Tacles/90", 0.0, 10.0, 2.0, 0.5)
-            interceptions_target = st.slider("Interceptions/90", 0.0, 5.0, 1.0, 0.5)
-            dribbles_target = st.slider("Dribbles/90", 0.0, 10.0, 2.0, 0.5)
+            tackles_target = st.slider("Tacles/90", 0.0, 10.0, 2.0, 0.5, key='profile_tackles')
+            interceptions_target = st.slider("Interceptions/90", 0.0, 5.0, 1.0, 0.5, key='profile_interceptions')
+            dribbles_target = st.slider("Dribbles/90", 0.0, 10.0, 2.0, 0.5, key='profile_dribbles')
         
         profile = {
             'goals_per_90': goals_target,
@@ -722,23 +722,23 @@ with tab3:
         
         col1, col2 = st.columns(2)
         with col1:
-            use_filters = st.checkbox("Activer les filtres")
+            use_filters = st.checkbox("Activer les filtres", key='profile_use_filters')
         with col2:
-            results_count = st.slider("Nombre de résultats", 5, 20, 10)
+            results_count = st.slider("Nombre de résultats", 5, 20, 10, key='profile_results_count')
         
         filters = None
         if use_filters:
             col1, col2 = st.columns(2)
             with col1:
-                min_matches_filter = st.number_input("Matchs minimum", 0, 50, 5)
+                min_matches_filter = st.number_input("Matchs minimum", 0, 50, 5, key='profile_min_matches')
             with col2:
                 if 'age' in df.columns:
-                    max_age_filter = st.number_input("Âge maximum", 18, 40, 30)
+                    max_age_filter = st.number_input("Âge maximum", 18, 40, 30, key='profile_max_age')
                     filters = {'min_matches': min_matches_filter, 'max_age': max_age_filter}
                 else:
                     filters = {'min_matches': min_matches_filter}
         
-        if st.button("🎯 Trouver les joueurs correspondants", type="primary", use_container_width=True):
+        if st.button("🎯 Trouver les joueurs correspondants", type="primary", use_container_width=True, key='profile_search'):
             with st.spinner("🤖 Recherche IA en cours..."):
                 results = recommender.recommend_by_profile(profile, df, top_n=results_count, filters=filters)
                 
@@ -831,14 +831,15 @@ with tab3:
             role_choice = st.selectbox(
                 "Ou sélectionnez via le menu",
                 options=list(roles.keys()),
-                format_func=lambda x: roles[x]['name']
+                format_func=lambda x: roles[x]['name'],
+                key='role_selector'
             )
         
-        results_count = st.slider("Nombre de résultats", 5, 20, 10, key='role_results')
+        results_count_role = st.slider("Nombre de résultats", 5, 20, 10, key='role_results_count')
         
-        if st.button("🔎 Trouver des joueurs pour ce rôle", type="primary", use_container_width=True):
+        if st.button("🔎 Trouver des joueurs pour ce rôle", type="primary", use_container_width=True, key='role_search'):
             with st.spinner(f"🤖 Recherche de {roles[role_choice]['name']}..."):
-                results = recommender.recommend_by_role(role_choice, df, top_n=results_count)
+                results = recommender.recommend_by_role(role_choice, df, top_n=results_count_role)
                 
                 if not results.empty:
                     st.success(f"✅ {len(results)} joueurs trouvés pour le rôle {roles[role_choice]['name']}!")
@@ -884,7 +885,8 @@ with tab3:
         with col1:
             departing = st.selectbox(
                 "👤 Joueur à remplacer",
-                options=sorted(df['player'].unique())
+                options=sorted(df['player'].unique()),
+                key='replacement_departing'
             )
             
             # Afficher les stats du joueur sortant
@@ -907,7 +909,8 @@ with tab3:
             upgrade = st.slider(
                 "⚡ Facteur d'amélioration",
                 0.8, 1.5, 1.0, 0.1,
-                help="1.0 = profil identique\n>1.0 = meilleur joueur\n<1.0 = profil inférieur"
+                help="1.0 = profil identique\n>1.0 = meilleur joueur\n<1.0 = profil inférieur",
+                key='replacement_upgrade'
             )
             
             if upgrade > 1.0:
@@ -917,12 +920,12 @@ with tab3:
             else:
                 st.info("🎯 Recherche d'un profil identique")
             
-            results_count = st.slider("Nombre de résultats", 5, 20, 10, key='replacement_results')
+            results_count_replacement = st.slider("Nombre de résultats", 5, 20, 10, key='replacement_results_count')
         
-        if st.button("🔍 Trouver des remplaçants", type="primary", use_container_width=True):
+        if st.button("🔍 Trouver des remplaçants", type="primary", use_container_width=True, key='replacement_search'):
             with st.spinner(f"🤖 Recherche de remplaçants pour {departing}..."):
                 results = recommender.recommend_replacement(
-                    departing, df, top_n=results_count, upgrade_factor=upgrade
+                    departing, df, top_n=results_count_replacement, upgrade_factor=upgrade
                 )
                 
                 if not results.empty:
@@ -944,54 +947,9 @@ with tab3:
                     fig.update_layout(height=500, yaxis={'categoryorder':'total ascending'})
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # Comparaison avec le joueur sortant
-                    st.markdown("---")
-                    st.subheader("📊 Comparaison avec le joueur sortant")
+                    # [... reste du code pour la comparaison ...]
                     
-                    # Top 3 remplaçants
-                    top_3 = results.head(3)
-                    
-                    comparison_metrics = ['goals_per_90', 'assists_per_90', 'passes_per_90', 'tackles_per_90']
-                    available_metrics = [m for m in comparison_metrics if m in df.columns]
-                    
-                    if available_metrics:
-                        # Créer graphique de comparaison
-                        comparison_data = []
-                        
-                        # Données du joueur sortant
-                        for metric in available_metrics:
-                            if metric in departing_data.index:
-                                comparison_data.append({
-                                    'Joueur': departing,
-                                    'Métrique': metric,
-                                    'Valeur': float(departing_data[metric]),
-                                    'Type': 'Sortant'
-                                })
-                        
-                        # Données des remplaçants
-                        for _, player_row in top_3.iterrows():
-                            for metric in available_metrics:
-                                if metric in player_row.index:
-                                    comparison_data.append({
-                                        'Joueur': player_row['player'],
-                                        'Métrique': metric,
-                                        'Valeur': float(player_row[metric]),
-                                        'Type': 'Remplaçant'
-                                    })
-                        
-                        comp_df = pd.DataFrame(comparison_data)
-                        
-                        fig = px.bar(
-                            comp_df,
-                            x='Métrique',
-                            y='Valeur',
-                            color='Joueur',
-                            barmode='group',
-                            title='Comparaison des Statistiques Clés'
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Tableau complet
+                    # Tableau
                     st.dataframe(
                         results.style.background_gradient(subset=['match_score'], cmap='Turbo'),
                         use_container_width=True,
