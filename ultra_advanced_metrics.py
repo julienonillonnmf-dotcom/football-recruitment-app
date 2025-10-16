@@ -18,58 +18,79 @@ class UltraAdvancedMetricsExtractor:
     """
     
     @staticmethod
-    def extract_all_metrics(events: pd.DataFrame, match_id: int) -> Dict:
+    def extract_all_metrics(events: pd.DataFrame, match_id: int) -> pd.DataFrame:
         """
         Extrait TOUTES les métriques disponibles pour un match
+        CORRECTION: Retourne DataFrame au lieu de Dict
         """
-        stats_list = []
-        
-        for player in events['player'].dropna().unique():
-            player_events = events[events['player'] == player]
+        try:
+            stats_list = []
             
-            # Créer un dictionnaire avec TOUTES les métriques
-            stats = {
-                'match_id': match_id,
-                'player': player,
-                'team': player_events['team'].iloc[0] if len(player_events) > 0 else None,
-            }
+            for player in events['player'].dropna().unique():
+                player_events = events[events['player'] == player]
+                
+                # Créer un dictionnaire avec TOUTES les métriques
+                stats = {
+                    'match_id': match_id,
+                    'player': player,
+                    'team': player_events['team'].iloc[0] if len(player_events) > 0 else None,
+                }
+                
+                # ==================== PASSES (20+ métriques) ====================
+                stats.update(UltraAdvancedMetricsExtractor._extract_pass_metrics(player_events))
+                
+                # ==================== TIRS (15+ métriques) ====================
+                stats.update(UltraAdvancedMetricsExtractor._extract_shot_metrics(player_events))
+                
+                # ==================== DÉFENSE (15+ métriques) ====================
+                stats.update(UltraAdvancedMetricsExtractor._extract_defensive_metrics(player_events))
+                
+                # ==================== DRIBBLES & CARRIES (10+ métriques) ====================
+                stats.update(UltraAdvancedMetricsExtractor._extract_dribble_carry_metrics(player_events))
+                
+                # ==================== DUELS (10+ métriques) ====================
+                stats.update(UltraAdvancedMetricsExtractor._extract_duel_metrics(player_events))
+                
+                # ==================== POSITION & ZONE (10+ métriques) ====================
+                stats.update(UltraAdvancedMetricsExtractor._extract_positional_metrics(player_events))
+                
+                # ==================== PRESSION (5+ métriques) ====================
+                stats.update(UltraAdvancedMetricsExtractor._extract_pressure_metrics(player_events))
+                
+                # ==================== ÉVÉNEMENTS SPÉCIAUX (10+ métriques) ====================
+                stats.update(UltraAdvancedMetricsExtractor._extract_special_events(player_events))
+                
+                # ==================== xG & xA AVANCÉS (5+ métriques) ====================
+                stats.update(UltraAdvancedMetricsExtractor._extract_expected_metrics(player_events))
+                
+                stats_list.append(stats)
             
-            # ==================== PASSES (20+ métriques) ====================
-            stats.update(UltraAdvancedMetricsExtractor._extract_pass_metrics(player_events))
-            
-            # ==================== TIRS (15+ métriques) ====================
-            stats.update(UltraAdvancedMetricsExtractor._extract_shot_metrics(player_events))
-            
-            # ==================== DÉFENSE (15+ métriques) ====================
-            stats.update(UltraAdvancedMetricsExtractor._extract_defensive_metrics(player_events))
-            
-            # ==================== DRIBBLES & CARRIES (10+ métriques) ====================
-            stats.update(UltraAdvancedMetricsExtractor._extract_dribble_carry_metrics(player_events))
-            
-            # ==================== DUELS (10+ métriques) ====================
-            stats.update(UltraAdvancedMetricsExtractor._extract_duel_metrics(player_events))
-            
-            # ==================== POSITION & ZONE (10+ métriques) ====================
-            stats.update(UltraAdvancedMetricsExtractor._extract_positional_metrics(player_events))
-            
-            # ==================== PRESSION (5+ métriques) ====================
-            stats.update(UltraAdvancedMetricsExtractor._extract_pressure_metrics(player_events))
-            
-            # ==================== ÉVÉNEMENTS SPÉCIAUX (10+ métriques) ====================
-            stats.update(UltraAdvancedMetricsExtractor._extract_special_events(player_events))
-            
-            # ==================== xG & xA AVANCÉS (5+ métriques) ====================
-            stats.update(UltraAdvancedMetricsExtractor._extract_expected_metrics(player_events))
-            
-            stats_list.append(stats)
-        
-        return pd.DataFrame(stats_list)
+            # CORRECTION: Toujours retourner un DataFrame
+            if stats_list:
+                return pd.DataFrame(stats_list)
+            else:
+                return pd.DataFrame()
+                
+        except Exception as e:
+            print(f"❌ Erreur extraction match {match_id}: {e}")
+            return pd.DataFrame()
+    
+    @staticmethod
+    def _safe_get_dict_value(obj, key, default=''):
+        """Helper pour accéder aux dictionnaires imbriqués de manière sûre"""
+        try:
+            if isinstance(obj, dict) and key in obj:
+                val = obj[key]
+                if isinstance(val, dict) and 'name' in val:
+                    return val['name']
+                return val
+            return default
+        except:
+            return default
     
     @staticmethod
     def _extract_pass_metrics(events: pd.DataFrame) -> Dict:
-        """
-        🎯 PASSES : 20+ métriques détaillées
-        """
+        """🎯 PASSES : 20+ métriques détaillées"""
         passes = events[events['type'] == 'Pass']
         
         metrics = {
@@ -79,47 +100,69 @@ class UltraAdvancedMetricsExtractor:
             'assists': len(passes[passes.get('pass_goal_assist', pd.Series([False])) == True]) if 'pass_goal_assist' in passes.columns else 0,
             'key_passes': len(passes[passes.get('pass_shot_assist', pd.Series([False])) == True]) if 'pass_shot_assist' in passes.columns else 0,
             
-            # 🆕 NOUVEAU : Types de passes
-            'short_passes': len(passes[passes.get('pass_length', 0) < 15]) if 'pass_length' in passes.columns else 0,
-            'medium_passes': len(passes[(passes.get('pass_length', 0) >= 15) & (passes.get('pass_length', 0) < 30)]) if 'pass_length' in passes.columns else 0,
-            'long_passes': len(passes[passes.get('pass_length', 0) >= 30]) if 'pass_length' in passes.columns else 0,
+            # Types de passes
+            'short_passes': 0,
+            'medium_passes': 0,
+            'long_passes': 0,
             
-            # 🆕 NOUVEAU : Passes spéciales
+            # Passes spéciales
             'through_balls': len(passes[passes.get('pass_through_ball', False) == True]) if 'pass_through_ball' in passes.columns else 0,
             'crosses': len(passes[passes.get('pass_cross', False) == True]) if 'pass_cross' in passes.columns else 0,
             'switches': len(passes[passes.get('pass_switch', False) == True]) if 'pass_switch' in passes.columns else 0,
             'cutbacks': len(passes[passes.get('pass_cut_back', False) == True]) if 'pass_cut_back' in passes.columns else 0,
             
-            # 🆕 NOUVEAU : Passes sous pression
+            # Passes sous pression
             'passes_under_pressure': len(passes[passes.get('under_pressure', False) == True]) if 'under_pressure' in passes.columns else 0,
             
-            # 🆕 NOUVEAU : Hauteur des passes
-            'ground_passes': len(passes[passes.get('pass_height', {}).get('name') == 'Ground Pass']) if 'pass_height' in passes.columns else 0,
-            'high_passes': len(passes[passes.get('pass_height', {}).get('name') == 'High Pass']) if 'pass_height' in passes.columns else 0,
+            # Hauteur des passes
+            'ground_passes': 0,
+            'high_passes': 0,
             
-            # 🆕 NOUVEAU : Direction
-            'forward_passes': 0,  # Calculé avec les coordonnées
+            # Direction
+            'forward_passes': 0,
             'backward_passes': 0,
             'lateral_passes': 0,
             
-            # 🆕 NOUVEAU : Passes progressives
-            'progressive_passes': 0,  # Distance gagnée vers le but > 10m
+            # Passes progressives
+            'progressive_passes': 0,
             'progressive_distance': 0.0,
         }
+        
+        # Longueur des passes
+        if 'pass_length' in passes.columns:
+            for length in passes['pass_length'].dropna():
+                try:
+                    if length < 15:
+                        metrics['short_passes'] += 1
+                    elif length < 30:
+                        metrics['medium_passes'] += 1
+                    else:
+                        metrics['long_passes'] += 1
+                except:
+                    continue
+        
+        # Hauteur (accès sécurisé)
+        if 'pass_height' in passes.columns:
+            for height in passes['pass_height'].dropna():
+                height_name = UltraAdvancedMetricsExtractor._safe_get_dict_value(height, 'name')
+                if height_name == 'Ground Pass':
+                    metrics['ground_passes'] += 1
+                elif height_name == 'High Pass':
+                    metrics['high_passes'] += 1
         
         # Calcul des passes directionnelles avec coordonnées
         if 'location' in passes.columns and 'pass_end_location' in passes.columns:
             for idx, row in passes.iterrows():
                 try:
-                    if pd.notna(row.get('location')) and pd.notna(row.get('pass_end_location')):
-                        start = row['location']
-                        end = row['pass_end_location']
-                        
-                        if isinstance(start, (list, tuple)) and isinstance(end, (list, tuple)) and len(start) >= 2 and len(end) >= 2:
-                            x_diff = end[0] - start[0]
-                            y_diff = end[1] - start[1]
+                    start = row.get('location')
+                    end = row.get('pass_end_location')
+                    
+                    if pd.notna(start) and pd.notna(end) and isinstance(start, (list, tuple, np.ndarray)) and isinstance(end, (list, tuple, np.ndarray)):
+                        if len(start) >= 2 and len(end) >= 2:
+                            x_diff = float(end[0]) - float(start[0])
+                            y_diff = float(end[1]) - float(start[1])
                             
-                            # Passes progressives (vers le but adverse)
+                            # Passes progressives
                             if x_diff > 10:
                                 metrics['progressive_passes'] += 1
                                 metrics['progressive_distance'] += x_diff
@@ -139,9 +182,7 @@ class UltraAdvancedMetricsExtractor:
     
     @staticmethod
     def _extract_shot_metrics(events: pd.DataFrame) -> Dict:
-        """
-        ⚽ TIRS : 15+ métriques détaillées
-        """
+        """⚽ TIRS : 15+ métriques détaillées"""
         shots = events[events['type'] == 'Shot']
         
         metrics = {
@@ -151,53 +192,66 @@ class UltraAdvancedMetricsExtractor:
             'shots_on_target': len(shots[shots['shot_outcome'].isin(['Goal', 'Saved'])]),
             'xG': shots['shot_statsbomb_xg'].sum() if 'shot_statsbomb_xg' in shots.columns else 0,
             
-            # 🆕 NOUVEAU : Types de tirs
-            'shots_open_play': len(shots[shots.get('shot_type', {}).get('name') == 'Open Play']) if 'shot_type' in shots.columns else 0,
-            'shots_free_kick': len(shots[shots.get('shot_type', {}).get('name') == 'Free Kick']) if 'shot_type' in shots.columns else 0,
-            'shots_penalty': len(shots[shots.get('shot_type', {}).get('name') == 'Penalty']) if 'shot_type' in shots.columns else 0,
+            # Types de tirs
+            'shots_open_play': 0,
+            'shots_free_kick': 0,
+            'shots_penalty': 0,
             
-            # 🆕 NOUVEAU : Partie du corps
-            'shots_right_foot': len(shots[shots.get('shot_body_part', {}).get('name') == 'Right Foot']) if 'shot_body_part' in shots.columns else 0,
-            'shots_left_foot': len(shots[shots.get('shot_body_part', {}).get('name') == 'Left Foot']) if 'shot_body_part' in shots.columns else 0,
-            'shots_head': len(shots[shots.get('shot_body_part', {}).get('name') == 'Head']) if 'shot_body_part' in shots.columns else 0,
+            # Partie du corps
+            'shots_right_foot': 0,
+            'shots_left_foot': 0,
+            'shots_head': 0,
             
-            # 🆕 NOUVEAU : Technique
+            # Technique
             'shots_first_time': len(shots[shots.get('shot_first_time', False) == True]) if 'shot_first_time' in shots.columns else 0,
             'shots_one_on_one': len(shots[shots.get('shot_one_on_one', False) == True]) if 'shot_one_on_one' in shots.columns else 0,
             
-            # 🆕 NOUVEAU : Résultats détaillés
+            # Résultats détaillés
             'shots_saved': len(shots[shots['shot_outcome'] == 'Saved']),
             'shots_blocked': len(shots[shots['shot_outcome'] == 'Blocked']),
             'shots_off_target': len(shots[shots['shot_outcome'] == 'Off T']),
             'shots_post': len(shots[shots['shot_outcome'] == 'Post']),
         }
         
+        # Types (accès sécurisé)
+        if 'shot_type' in shots.columns:
+            for shot_type in shots['shot_type'].dropna():
+                type_name = UltraAdvancedMetricsExtractor._safe_get_dict_value(shot_type, 'name')
+                if type_name == 'Open Play':
+                    metrics['shots_open_play'] += 1
+                elif type_name == 'Free Kick':
+                    metrics['shots_free_kick'] += 1
+                elif type_name == 'Penalty':
+                    metrics['shots_penalty'] += 1
+        
+        # Partie du corps (accès sécurisé)
+        if 'shot_body_part' in shots.columns:
+            for body_part in shots['shot_body_part'].dropna():
+                part_name = UltraAdvancedMetricsExtractor._safe_get_dict_value(body_part, 'name')
+                if part_name == 'Right Foot':
+                    metrics['shots_right_foot'] += 1
+                elif part_name == 'Left Foot':
+                    metrics['shots_left_foot'] += 1
+                elif part_name == 'Head':
+                    metrics['shots_head'] += 1
+        
         return metrics
     
     @staticmethod
     def _extract_defensive_metrics(events: pd.DataFrame) -> Dict:
-        """
-        🛡️ DÉFENSE : 15+ métriques détaillées
-        """
+        """🛡️ DÉFENSE : 15+ métriques détaillées"""
         metrics = {
-            # Basique
             'tackles': len(events[events['type'] == 'Duel']),
             'interceptions': len(events[events['type'] == 'Interception']),
             'clearances': len(events[events['type'] == 'Clearance']),
             'blocks': len(events[events['type'] == 'Block']),
-            
-            # 🆕 NOUVEAU : Récupérations
             'ball_recoveries': len(events[events['type'] == 'Ball Recovery']),
             'ball_recoveries_offensive_third': 0,
             'ball_recoveries_middle_third': 0,
             'ball_recoveries_defensive_third': 0,
-            
-            # 🆕 NOUVEAU : Erreurs
             'errors': len(events[events['type'] == 'Error']),
             'dispossessed': len(events[events['type'] == 'Dispossessed']),
             'miscontrol': len(events[events['type'] == 'Miscontrol']),
-            
-            # 🆕 NOUVEAU : Gardien (si applicable)
             'goalkeeper_saves': len(events[events['type'] == 'Goal Keeper']),
             'goalkeeper_punches': 0,
             'goalkeeper_claims': 0,
@@ -209,8 +263,9 @@ class UltraAdvancedMetricsExtractor:
         if 'location' in recoveries.columns:
             for idx, row in recoveries.iterrows():
                 try:
-                    if pd.notna(row.get('location')) and isinstance(row['location'], (list, tuple)) and len(row['location']) >= 2:
-                        x = row['location'][0]
+                    loc = row.get('location')
+                    if pd.notna(loc) and isinstance(loc, (list, tuple, np.ndarray)) and len(loc) >= 2:
+                        x = float(loc[0])
                         if x < 40:
                             metrics['ball_recoveries_defensive_third'] += 1
                         elif x < 80:
@@ -220,67 +275,66 @@ class UltraAdvancedMetricsExtractor:
                 except:
                     continue
         
-        # Gardien détails
+        # Gardien (accès sécurisé)
         gk_events = events[events['type'] == 'Goal Keeper']
         if 'goalkeeper_type' in gk_events.columns:
             for gk_type in gk_events['goalkeeper_type'].dropna():
-                if isinstance(gk_type, dict) and 'name' in gk_type:
-                    if gk_type['name'] == 'Punch':
-                        metrics['goalkeeper_punches'] += 1
-                    elif gk_type['name'] == 'Claim':
-                        metrics['goalkeeper_claims'] += 1
-                    elif gk_type['name'] == 'Smother':
-                        metrics['goalkeeper_smother'] += 1
+                gk_name = UltraAdvancedMetricsExtractor._safe_get_dict_value(gk_type, 'name')
+                if gk_name == 'Punch':
+                    metrics['goalkeeper_punches'] += 1
+                elif gk_name == 'Claim':
+                    metrics['goalkeeper_claims'] += 1
+                elif gk_name == 'Smother':
+                    metrics['goalkeeper_smother'] += 1
         
         return metrics
     
     @staticmethod
     def _extract_dribble_carry_metrics(events: pd.DataFrame) -> Dict:
-        """
-        🏃 DRIBBLES & CARRIES : 10+ métriques
-        """
+        """🏃 DRIBBLES & CARRIES : 10+ métriques"""
         dribbles = events[events['type'] == 'Dribble']
         carries = events[events['type'] == 'Carry']
         
         metrics = {
-            # Dribbles
             'dribbles': len(dribbles),
-            'dribbles_completed': len(dribbles[dribbles.get('dribble_outcome', {}).get('name') == 'Complete']) if 'dribble_outcome' in dribbles.columns else 0,
-            'dribbles_past_opponent': len(dribbles[dribbles.get('dribble_outcome', {}).get('name') == 'Complete']) if 'dribble_outcome' in dribbles.columns else 0,
-            
-            # 🆕 NOUVEAU : Carries (courses avec ballon)
+            'dribbles_completed': 0,
+            'dribbles_past_opponent': 0,
             'carries': len(carries),
-            'carry_distance': carries['carry_end_location'].apply(
-                lambda x: np.sqrt((x[0] - 0)**2 + (x[1] - 0)**2) if pd.notna(x) and isinstance(x, (list, tuple)) and len(x) >= 2 else 0
-            ).sum() if 'carry_end_location' in carries.columns else 0,
+            'carry_distance': 0.0,
             'progressive_carries': 0,
             'carries_into_box': 0,
             'carries_into_final_third': 0,
-            
-            # 🆕 NOUVEAU : Nutmegs
             'nutmegs': len(dribbles[dribbles.get('dribble_nutmeg', False) == True]) if 'dribble_nutmeg' in dribbles.columns else 0,
         }
         
-        # Carries progressifs
+        # Dribbles réussis (accès sécurisé)
+        if 'dribble_outcome' in dribbles.columns:
+            for outcome in dribbles['dribble_outcome'].dropna():
+                outcome_name = UltraAdvancedMetricsExtractor._safe_get_dict_value(outcome, 'name')
+                if outcome_name == 'Complete':
+                    metrics['dribbles_completed'] += 1
+                    metrics['dribbles_past_opponent'] += 1
+        
+        # Carries
         if 'location' in carries.columns and 'carry_end_location' in carries.columns:
             for idx, row in carries.iterrows():
                 try:
-                    if pd.notna(row.get('location')) and pd.notna(row.get('carry_end_location')):
-                        start = row['location']
-                        end = row['carry_end_location']
-                        
-                        if isinstance(start, (list, tuple)) and isinstance(end, (list, tuple)) and len(start) >= 2 and len(end) >= 2:
-                            x_diff = end[0] - start[0]
+                    start = row.get('location')
+                    end = row.get('carry_end_location')
+                    
+                    if pd.notna(start) and pd.notna(end) and isinstance(start, (list, tuple, np.ndarray)) and isinstance(end, (list, tuple, np.ndarray)):
+                        if len(start) >= 2 and len(end) >= 2:
+                            x_diff = float(end[0]) - float(start[0])
+                            distance = np.sqrt((float(end[0]) - float(start[0]))**2 + (float(end[1]) - float(start[1]))**2)
+                            metrics['carry_distance'] += distance
                             
                             if x_diff > 5:
                                 metrics['progressive_carries'] += 1
                             
-                            # Dans la surface
-                            if end[0] > 102 and 18 <= end[1] <= 62:
+                            if float(end[0]) > 102 and 18 <= float(end[1]) <= 62:
                                 metrics['carries_into_box'] += 1
                             
-                            # Dans le dernier tiers
-                            if end[0] > 80:
+                            if float(end[0]) > 80:
                                 metrics['carries_into_final_third'] += 1
                 except:
                     continue
@@ -289,17 +343,13 @@ class UltraAdvancedMetricsExtractor:
     
     @staticmethod
     def _extract_duel_metrics(events: pd.DataFrame) -> Dict:
-        """
-        ⚔️ DUELS : 10+ métriques
-        """
+        """⚔️ DUELS : 10+ métriques"""
         duels = events[events['type'] == 'Duel']
         
         metrics = {
             'duels_total': len(duels),
-            'duels_won': len(duels[duels.get('duel_outcome', {}).get('name') == 'Won']) if 'duel_outcome' in duels.columns else 0,
-            'duels_lost': len(duels[duels.get('duel_outcome', {}).get('name') == 'Lost']) if 'duel_outcome' in duels.columns else 0,
-            
-            # 🆕 NOUVEAU : Types de duels
+            'duels_won': 0,
+            'duels_lost': 0,
             'aerial_duels': 0,
             'aerial_duels_won': 0,
             'ground_duels': 0,
@@ -308,43 +358,48 @@ class UltraAdvancedMetricsExtractor:
             'loose_ball_duels_won': 0,
         }
         
-        # Duels par type
-        if 'duel_type' in duels.columns:
-            for idx, row in duels.iterrows():
-                try:
-                    duel_type = row.get('duel_type', {})
-                    outcome = row.get('duel_outcome', {})
-                    
-                    if isinstance(duel_type, dict) and 'name' in duel_type:
-                        if 'Aerial' in duel_type['name']:
-                            metrics['aerial_duels'] += 1
-                            if isinstance(outcome, dict) and outcome.get('name') == 'Won':
-                                metrics['aerial_duels_won'] += 1
-                        elif 'Ground' in duel_type['name']:
-                            metrics['ground_duels'] += 1
-                            if isinstance(outcome, dict) and outcome.get('name') == 'Won':
-                                metrics['ground_duels_won'] += 1
-                        elif 'Loose Ball' in duel_type['name']:
-                            metrics['loose_ball_duels'] += 1
-                            if isinstance(outcome, dict) and outcome.get('name') == 'Won':
-                                metrics['loose_ball_duels_won'] += 1
-                except:
-                    continue
+        # Duels (accès sécurisé)
+        if 'duel_outcome' in duels.columns:
+            for outcome in duels['duel_outcome'].dropna():
+                outcome_name = UltraAdvancedMetricsExtractor._safe_get_dict_value(outcome, 'name')
+                if outcome_name == 'Won':
+                    metrics['duels_won'] += 1
+                elif outcome_name == 'Lost':
+                    metrics['duels_lost'] += 1
+        
+        # Par type
+        for idx, row in duels.iterrows():
+            try:
+                duel_type = row.get('duel_type')
+                outcome = row.get('duel_outcome')
+                
+                type_name = UltraAdvancedMetricsExtractor._safe_get_dict_value(duel_type, 'name')
+                outcome_name = UltraAdvancedMetricsExtractor._safe_get_dict_value(outcome, 'name')
+                
+                if 'Aerial' in type_name:
+                    metrics['aerial_duels'] += 1
+                    if outcome_name == 'Won':
+                        metrics['aerial_duels_won'] += 1
+                elif 'Ground' in type_name:
+                    metrics['ground_duels'] += 1
+                    if outcome_name == 'Won':
+                        metrics['ground_duels_won'] += 1
+                elif 'Loose Ball' in type_name:
+                    metrics['loose_ball_duels'] += 1
+                    if outcome_name == 'Won':
+                        metrics['loose_ball_duels_won'] += 1
+            except:
+                continue
         
         return metrics
     
     @staticmethod
     def _extract_positional_metrics(events: pd.DataFrame) -> Dict:
-        """
-        📍 POSITION & ZONE : 10+ métriques
-        """
+        """📍 POSITION & ZONE : 10+ métriques"""
         metrics = {
-            # Actions par tiers du terrain
             'actions_defensive_third': 0,
             'actions_middle_third': 0,
             'actions_attacking_third': 0,
-            
-            # 🆕 NOUVEAU : Heatmap zones (divisé en 9 zones)
             'zone_def_left': 0,
             'zone_def_center': 0,
             'zone_def_right': 0,
@@ -354,32 +409,32 @@ class UltraAdvancedMetricsExtractor:
             'zone_att_left': 0,
             'zone_att_center': 0,
             'zone_att_right': 0,
-            
-            # 🆕 NOUVEAU : Touches de balle
             'touches': len(events),
             'touches_in_box': 0,
         }
         
-        # Calcul par zone
         for idx, row in events.iterrows():
             try:
-                if pd.notna(row.get('location')) and isinstance(row['location'], (list, tuple)) and len(row['location']) >= 2:
-                    x, y = row['location'][0], row['location'][1]
+                loc = row.get('location')
+                if pd.notna(loc) and isinstance(loc, (list, tuple, np.ndarray)) and len(loc) >= 2:
+                    x, y = float(loc[0]), float(loc[1])
                     
                     # Tiers
                     if x < 40:
                         metrics['actions_defensive_third'] += 1
+                        zone_x = 'def'
                     elif x < 80:
                         metrics['actions_middle_third'] += 1
+                        zone_x = 'mid'
                     else:
                         metrics['actions_attacking_third'] += 1
+                        zone_x = 'att'
                     
                     # 9 zones
-                    zone_x = 'def' if x < 40 else ('mid' if x < 80 else 'att')
                     zone_y = 'left' if y < 27 else ('center' if y < 53 else 'right')
                     metrics[f'zone_{zone_x}_{zone_y}'] += 1
                     
-                    # Dans la surface
+                    # Surface
                     if x > 102 and 18 <= y <= 62:
                         metrics['touches_in_box'] += 1
             except:
@@ -389,9 +444,7 @@ class UltraAdvancedMetricsExtractor:
     
     @staticmethod
     def _extract_pressure_metrics(events: pd.DataFrame) -> Dict:
-        """
-        💪 PRESSION : 5+ métriques
-        """
+        """💪 PRESSION : 5+ métriques"""
         pressures = events[events['type'] == 'Pressure']
         
         metrics = {
@@ -402,54 +455,51 @@ class UltraAdvancedMetricsExtractor:
             'pressures_attacking_third': 0,
         }
         
-        # Par zone
-        if 'location' in pressures.columns:
-            for idx, row in pressures.iterrows():
-                try:
-                    if pd.notna(row.get('location')) and isinstance(row['location'], (list, tuple)) and len(row['location']) >= 2:
-                        x = row['location'][0]
-                        
-                        if x < 40:
-                            metrics['pressures_defensive_third'] += 1
-                        elif x < 80:
-                            metrics['pressures_middle_third'] += 1
-                        else:
-                            metrics['pressures_attacking_third'] += 1
-                except:
-                    continue
+        for idx, row in pressures.iterrows():
+            try:
+                loc = row.get('location')
+                if pd.notna(loc) and isinstance(loc, (list, tuple, np.ndarray)) and len(loc) >= 2:
+                    x = float(loc[0])
+                    if x < 40:
+                        metrics['pressures_defensive_third'] += 1
+                    elif x < 80:
+                        metrics['pressures_middle_third'] += 1
+                    else:
+                        metrics['pressures_attacking_third'] += 1
+            except:
+                continue
         
         return metrics
     
     @staticmethod
     def _extract_special_events(events: pd.DataFrame) -> Dict:
-        """
-        ⭐ ÉVÉNEMENTS SPÉCIAUX : 10+ métriques
-        """
+        """⭐ ÉVÉNEMENTS SPÉCIAUX : 10+ métriques"""
         metrics = {
-            # Fautes
             'fouls_committed': len(events[events['type'] == 'Foul Committed']),
             'fouls_won': len(events[events['type'] == 'Foul Won']),
-            'yellow_cards': len(events[events.get('foul_committed_card', {}).get('name') == 'Yellow Card']) if 'foul_committed_card' in events.columns else 0,
-            'red_cards': len(events[events.get('foul_committed_card', {}).get('name') == 'Red Card']) if 'foul_committed_card' in events.columns else 0,
-            
-            # 🆕 NOUVEAU : Corners & coups francs
+            'yellow_cards': 0,
+            'red_cards': 0,
             '50_50': len(events[events['type'] == '50/50']),
             'bad_behaviour': len(events[events['type'] == 'Bad Behaviour']),
-            
-            # 🆕 NOUVEAU : Remplacements
             'substitutions': len(events[events['type'] == 'Substitution']),
-            
-            # 🆕 NOUVEAU : Offside
             'offsides': len(events[events['type'] == 'Offside']),
         }
+        
+        # Cartons (accès sécurisé)
+        fouls = events[events['type'] == 'Foul Committed']
+        if 'foul_committed_card' in fouls.columns:
+            for card in fouls['foul_committed_card'].dropna():
+                card_name = UltraAdvancedMetricsExtractor._safe_get_dict_value(card, 'name')
+                if card_name == 'Yellow Card':
+                    metrics['yellow_cards'] += 1
+                elif card_name == 'Red Card':
+                    metrics['red_cards'] += 1
         
         return metrics
     
     @staticmethod
     def _extract_expected_metrics(events: pd.DataFrame) -> Dict:
-        """
-        📊 xG & xA AVANCÉS : 5+ métriques
-        """
+        """📊 xG & xA AVANCÉS : 5+ métriques"""
         shots = events[events['type'] == 'Shot']
         passes = events[events['type'] == 'Pass']
         
@@ -457,8 +507,6 @@ class UltraAdvancedMetricsExtractor:
             'xG_total': shots['shot_statsbomb_xg'].sum() if 'shot_statsbomb_xg' in shots.columns else 0,
             'xG_open_play': 0,
             'xG_set_piece': 0,
-            
-            # 🆕 NOUVEAU : xA (Expected Assists)
             'xA_total': 0,
             'xA_from_crosses': 0,
         }
@@ -467,83 +515,38 @@ class UltraAdvancedMetricsExtractor:
         if 'shot_type' in shots.columns and 'shot_statsbomb_xg' in shots.columns:
             for idx, row in shots.iterrows():
                 try:
-                    xg_val = row['shot_statsbomb_xg']
-                    shot_type = row.get('shot_type', {})
+                    xg_val = row.get('shot_statsbomb_xg')
+                    shot_type = row.get('shot_type')
                     
-                    if pd.notna(xg_val) and isinstance(shot_type, dict) and 'name' in shot_type:
-                        if shot_type['name'] == 'Open Play':
-                            metrics['xG_open_play'] += xg_val
-                        else:
-                            metrics['xG_set_piece'] += xg_val
+                    if pd.notna(xg_val):
+                        type_name = UltraAdvancedMetricsExtractor._safe_get_dict_value(shot_type, 'name')
+                        if type_name == 'Open Play':
+                            metrics['xG_open_play'] += float(xg_val)
+                        elif type_name:
+                            metrics['xG_set_piece'] += float(xg_val)
                 except:
                     continue
         
-        # xA (passes qui mènent à des tirs)
+        # xA
         if 'pass_shot_assist' in passes.columns:
             key_passes = passes[passes['pass_shot_assist'] == True]
             
-            # Pour chaque passe clé, chercher le tir suivant pour récupérer son xG
             for idx, kp in key_passes.iterrows():
                 try:
-                    # Chercher les événements suivants
                     next_events = events[events.index > idx].head(5)
                     next_shots = next_events[next_events['type'] == 'Shot']
                     
                     if not next_shots.empty and 'shot_statsbomb_xg' in next_shots.columns:
-                        xg = next_shots.iloc[0]['shot_statsbomb_xg']
+                        xg = next_shots.iloc[0].get('shot_statsbomb_xg')
                         if pd.notna(xg):
-                            metrics['xA_total'] += xg
+                            metrics['xA_total'] += float(xg)
                             
-                            # Si c'est un centre
                             if kp.get('pass_cross', False):
-                                metrics['xA_from_crosses'] += xg
+                                metrics['xA_from_crosses'] += float(xg)
                 except:
                     continue
         
         return metrics
-
-
-def integrate_ultra_metrics(df: pd.DataFrame, all_events_dict: Dict) -> pd.DataFrame:
-    """
-    Intègre toutes les métriques ultra-avancées dans le DataFrame
-    
-    Args:
-        df: DataFrame avec stats de base
-        all_events_dict: Dict {player_name: events_df}
-    
-    Returns:
-        DataFrame avec 100+ colonnes !
-    """
-    print("🚀 Extraction des métriques ultra-avancées...")
-    
-    # Pour chaque joueur, extraire toutes les métriques
-    enhanced_rows = []
-    
-    for idx, row in df.iterrows():
-        player = row['player']
-        
-        if player in all_events_dict:
-            events = all_events_dict[player]
-            
-            # Extraire toutes les métriques
-            extractor = UltraAdvancedMetricsExtractor()
-            ultra_metrics = extractor.extract_all_metrics(events, row.get('match_id', 0))
-            
-            # Fusionner avec les données existantes
-            enhanced_row = row.to_dict()
-            if not ultra_metrics.empty:
-                ultra_row = ultra_metrics[ultra_metrics['player'] == player]
-                if not ultra_row.empty:
-                    enhanced_row.update(ultra_row.iloc[0].to_dict())
-            
-            enhanced_rows.append(enhanced_row)
-        else:
-            enhanced_rows.append(row.to_dict())
-    
-    result = pd.DataFrame(enhanced_rows)
-    
-    print(f"✅ Extraction terminée : {len(result.columns)} colonnes au total !")
-    return result
 
 
 if __name__ == "__main__":
