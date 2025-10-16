@@ -20,7 +20,7 @@ from advanced_visualizations import AdvancedPlayerVisualizations
 
 # 🎨 CONFIGURATION PAGE
 st.set_page_config(
-    page_title="⚽ Football Recruitment Pro",
+    page_title="⚽ Application de recrutement",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
